@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import (
     QMainWindow,
-    QTabWidget,
+    QSplitter,
     QVBoxLayout,
     QWidget,
     QStatusBar,
@@ -22,9 +22,9 @@ class MainWindow(QMainWindow):
         self.current_file_path: str | None = None
         self.is_modified = False
 
-        # Tab-Widget
-        self.tab_widget = QTabWidget()
-        self.setCentralWidget(self.tab_widget)
+        # Splitter (vertikal)
+        self.splitter = QSplitter(Qt.Orientation.Vertical)
+        self.setCentralWidget(self.splitter)
 
         # Placeholder für Tabs (werden später verdrahtet)
         self.team_tab = None
@@ -39,11 +39,13 @@ class MainWindow(QMainWindow):
 
     def set_team_tab(self, tab):
         self.team_tab = tab
-        self.tab_widget.addTab(tab, "Team")
+        self.splitter.addWidget(tab)
 
     def set_plan_tab(self, tab):
         self.plan_tab = tab
-        self.tab_widget.addTab(tab, "Dienstplan")
+        self.splitter.insertWidget(0, tab)
+        self.splitter.setStretchFactor(0, 2)
+        self.splitter.setStretchFactor(1, 1)
 
     def update_window_title(self):
         if self.current_file_path:

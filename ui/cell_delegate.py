@@ -15,7 +15,7 @@ class CellDelegate(QStyledItemDelegate):
         if option.state & QStyle.State_Selected:
             painter.fillRect(option.rect, option.palette.highlight())
         else:
-            painter.fillRect(option.rect, option.rect.color())
+            painter.fillRect(option.rect, option.palette.base())
 
         # Text zeichnen
         text = index.data(Qt.ItemDataRole.DisplayRole) or ""

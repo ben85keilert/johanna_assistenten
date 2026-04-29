@@ -2,7 +2,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QTableWidget,
     QTableWidgetItem, QMessageBox, QColorDialog, QHeaderView
 )
-from PySide6.QtCore import Qt, QSize
+from PySide6.QtCore import Qt, QSize, Signal
 from PySide6.QtGui import QColor, QPixmap
 
 from models import Assistant, AssistantConstraints, MonthPlan
@@ -14,6 +14,8 @@ from .constraints_dialog import ConstraintsDialog
 
 
 class TeamTab(QWidget):
+    assistants_changed = Signal()
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.plan: MonthPlan | None = None
@@ -90,6 +92,8 @@ class TeamTab(QWidget):
         if not self.plan or len(self.plan.assistants) >= 10:
             return
 
+        self._save_names_from_table()
+
         new_id = str(uuid.uuid4())[:8]
         constraints = AssistantConstraints(
             assistant_id=new_id,
@@ -106,10 +110,13 @@ class TeamTab(QWidget):
         )
         self.plan.assistants.append(assistant)
         self.refresh_table()
+        self.assistants_changed.emit()
 
     def remove_assistant(self):
         if not self.plan:
             return
+
+        self._save_names_from_table()
 
         row = self.table.currentRow()
         if row < 0:
@@ -118,10 +125,12 @@ class TeamTab(QWidget):
 
         del self.plan.assistants[row]
         self.refresh_table()
+        self.assistants_changed.emit()
 
     def update_assistant_color(self, row: int, color: str):
         if self.plan and 0 <= row < len(self.plan.assistants):
             self.plan.assistants[row].color = color
+            self.assistants_changed.emit()
 
     def edit_constraints(self):
         if not self.plan:
@@ -139,6 +148,15 @@ class TeamTab(QWidget):
         if dialog.exec():
             self.refresh_table()
 
+    def _save_names_from_table(self):
+        if not self.plan:
+            return
+        for i in range(self.table.rowCount()):
+            name_item = self.table.item(i, 1)
+            if name_item and i < len(self.plan.assistants):
+                self.plan.assistants[i].name = name_item.text()
+
     def on_double_click(self, index):
         if index.column() == 1:  # Name-Spalte
+            self._save_names_from_table()
             self.edit_constraints()

@@ -1,0 +1,26 @@
+[
+  {
+    "id": "f1f04d0e",
+    "name": "Martha",
+    "color": "#3498DB",
+    "active": true
+  },
+  {
+    "id": "4a0921a3",
+    "name": "Jürgen",
+    "color": "#ff5500",
+    "active": true
+  },
+  {
+    "id": "312442c2",
+    "name": "Bertha",
+    "color": "#aaff00",
+    "active": true
+  },
+  {
+    "id": "4874d6d5",
+    "name": "Neuer Helfer",
+    "color": "#3498DB",
+    "active": true
+  }
+]

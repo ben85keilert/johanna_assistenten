@@ -7,9 +7,8 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction
 
 from models import MonthPlan, Assistant, AssistantConstraints
-from persistence import save, load
+from persistence import save, load, save_team, load_team, save_plan, load_plan
 from datetime import datetime
-import uuid
 from ui.main_window import MainWindow
 from ui.team_tab import TeamTab
 from ui.plan_tab import PlanTab
@@ -19,7 +18,7 @@ class JohannaApp:
     def __init__(self):
         self.app = QApplication(sys.argv)
         self.window = MainWindow()
-        self.plan = self.create_new_plan()
+        self.plan = self._auto_load()
 
         self.team_tab = TeamTab()
         self.plan_tab = PlanTab()
@@ -30,22 +29,12 @@ class JohannaApp:
         self.setup_menu()
         self.load_plan_to_ui()
 
-    def create_new_plan(self) -> MonthPlan:
+    def _auto_load(self) -> MonthPlan:
+        assistants = load_team()
         now = datetime.now()
-        plan = MonthPlan(year=now.year, month=now.month)
-
-        # Dummy-Assistenten für Tests
-        for i in range(3):
-            aid = str(uuid.uuid4())[:8]
-            constraints = AssistantConstraints(assistant_id=aid)
-            assistant = Assistant(
-                id=aid,
-                name=f"Assistent {i+1}",
-                color=["#E74C3C", "#3498DB", "#2ECC71"][i],
-                constraints=constraints,
-            )
-            plan.assistants.append(assistant)
-
+        plan = load_plan(now.year, now.month, assistants)
+        if plan is None:
+            plan = MonthPlan(year=now.year, month=now.month, assistants=assistants)
         return plan
 
     def setup_menu(self):
@@ -100,6 +89,7 @@ class JohannaApp:
     def load_plan_to_ui(self):
         self.team_tab.set_plan(self.plan)
         self.plan_tab.set_plan(self.plan)
+        self.team_tab.assistants_changed.connect(self.plan_tab.rebuild_grid)
         self.window.mark_saved()
 
     def new_plan(self):
@@ -117,7 +107,9 @@ class JohannaApp:
             elif reply == QMessageBox.StandardButton.Cancel:
                 return
 
-        self.plan = self.create_new_plan()
+        assistants = load_team()
+        now = datetime.now()
+        self.plan = MonthPlan(year=now.year, month=now.month, assistants=assistants)
         self.window.current_file_path = None
         self.load_plan_to_ui()
 
@@ -137,23 +129,16 @@ class JohannaApp:
                 QMessageBox.critical(self.window, "Fehler", f"Laden fehlgeschlagen:\n{e}")
 
     def save_plan(self):
-        if not self.window.current_file_path:
-            path, _ = QFileDialog.getSaveFileName(
-                self.window,
-                "Plan speichern unter",
-                filter="JSON-Dateien (*.json)"
-            )
-            if not path:
-                return
-            self.window.current_file_path = path
-
         try:
+            self.team_tab._save_names_from_table()
             self.plan.modified_at = datetime.now().isoformat()
             if not self.plan.created_at:
                 self.plan.created_at = datetime.now().isoformat()
-            save(self.plan, self.window.current_file_path)
+            save_team(self.plan.assistants)
+            save_plan(self.plan)
             self.window.mark_saved()
-            self.window.status_bar.showMessage(f"Gespeichert: {self.window.current_file_path}")
+            year_month = f"{self.plan.year}-{self.plan.month:02d}"
+            self.window.status_bar.showMessage(f"Gespeichert: Plan {year_month}")
         except Exception as e:
             QMessageBox.critical(self.window, "Fehler", f"Speichern fehlgeschlagen:\n{e}")
 
