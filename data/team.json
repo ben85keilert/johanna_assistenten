@@ -24,6 +24,12 @@
       "name": "Dora",
       "color": "#9B59B6",
       "active": true
+    },
+    {
+      "id": "b0c044de",
+      "name": "Neuer Helfer",
+      "color": "#3498DB",
+      "active": true
     }
   ]
 }
