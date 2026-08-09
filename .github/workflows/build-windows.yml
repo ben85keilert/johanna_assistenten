@@ -6,6 +6,10 @@ on:
     tags:
       - "v*"
 
+# Noetig, damit der Workflow die ZIP an das GitHub-Release anhaengen darf
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: windows-latest
