@@ -5,7 +5,9 @@ from datetime import date
 from pathlib import Path
 
 from models.plan import MonthPlan
-from models.assistant import Assistant, AssistantConstraints
+from models.assistant import (
+    Assistant, AssistantConstraints, absence_days, set_absence_days
+)
 from models.shift import ShiftEntry, ShiftType
 from .migrations import (
     migrate_team,
@@ -28,8 +30,8 @@ PLANS_DIR = DATA_DIR / "plans"
 TEAM_FILE = DATA_DIR / "team.json"
 
 
-def _constraints_to_dict(c: AssistantConstraints) -> dict:
-    return {
+def _constraints_to_dict(c: AssistantConstraints, include_target: bool = True) -> dict:
+    result = {
         "assistant_id": c.assistant_id,
         "unavailable_dates": [d.isoformat() for d in c.unavailable_dates],
         "vacation_ranges": [
@@ -37,8 +39,19 @@ def _constraints_to_dict(c: AssistantConstraints) -> dict:
         ],
         "max_consecutive_days": c.max_consecutive_days,
         "min_block_days": c.min_block_days,
-        "target_shifts": c.target_shifts,
     }
+    if include_target:
+        result["target_shifts"] = c.target_shifts
+    return result
+
+
+def _is_default_constraints(c: AssistantConstraints) -> bool:
+    return (
+        not c.unavailable_dates
+        and not c.vacation_ranges
+        and c.max_consecutive_days == 3
+        and c.min_block_days == 1
+    )
 
 
 def _constraints_from_dict(c_data: dict, assistant_id: str = "") -> AssistantConstraints:
@@ -158,10 +171,18 @@ def team_path() -> Path:
 
 
 def save_team(assistants: list[Assistant]) -> None:
+    # Personenbezogene Constraints (Urlaube, Einzeltage, Max/Min) leben
+    # monatsuebergreifend hier; nur target_shifts gehoert zum Monatsplan
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     data = {
         "version": CURRENT_TEAM_VERSION,
-        "assistants": [_assistant_to_dict(a, with_constraints=False) for a in assistants],
+        "assistants": [
+            {
+                **_assistant_to_dict(a, with_constraints=False),
+                "constraints": _constraints_to_dict(a.constraints, include_target=False),
+            }
+            for a in assistants
+        ],
     }
     with open(TEAM_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
@@ -177,12 +198,15 @@ def load_team() -> list[Assistant]:
     assistants = []
     for a_data in data.get("assistants", []):
         if isinstance(a_data, dict):
+            constraints = _constraints_from_dict(
+                a_data.get("constraints", {}), a_data.get("id", "")
+            )
             assistants.append(
                 Assistant(
                     id=a_data.get("id", ""),
                     name=a_data.get("name", ""),
                     color=a_data.get("color", "#000000"),
-                    constraints=AssistantConstraints(assistant_id=a_data.get("id", "")),
+                    constraints=constraints,
                     active=a_data.get("active", True),
                 )
             )
@@ -202,7 +226,9 @@ def save_plan(plan: MonthPlan) -> None:
         "year": plan.year,
         "month": plan.month,
         "schedule": _schedule_to_dict(plan.schedule),
-        "constraints": [_constraints_to_dict(a.constraints) for a in plan.assistants],
+        # Nur die monatsbezogenen Soll-Dienste; alle uebrigen Constraints
+        # liegen monatsuebergreifend in team.json
+        "targets": {a.id: a.constraints.target_shifts for a in plan.assistants},
         "seed": plan.seed,
         "created_at": plan.created_at,
         "modified_at": plan.modified_at,
@@ -212,6 +238,8 @@ def save_plan(plan: MonthPlan) -> None:
 
 
 def load_plan(year: int, month: int, assistants: list[Assistant]) -> MonthPlan | None:
+    """Laedt den Monatsplan. Die uebergebenen Assistenten (aus team.json)
+    behalten ihre Constraints; nur target_shifts kommt aus der Monatsdatei."""
     path = plan_path(year, month)
     if not path.exists():
         return None
@@ -219,31 +247,37 @@ def load_plan(year: int, month: int, assistants: list[Assistant]) -> MonthPlan |
     with open(path, "r", encoding="utf-8") as f:
         data = migrate_plan(json.load(f))
 
-    constraints_by_id = {
-        c_data.get("assistant_id", ""): _constraints_from_dict(c_data)
-        for c_data in data.get("constraints", [])
+    targets = data.get("targets", {})
+
+    # Backfill fuer alte v2-Dateien: Constraints aus der Monatsdatei einmalig
+    # ins (noch leere) Team uebernehmen; gespeichert wird ab dann in team.json
+    legacy_by_id = {
+        c_data.get("assistant_id", ""): c_data
+        for c_data in data.get("legacy_constraints", [])
     }
 
-    loaded_assistants = []
     for assistant in assistants:
-        constraints = constraints_by_id.get(
-            assistant.id, AssistantConstraints(assistant_id=assistant.id)
-        )
-        loaded_assistants.append(
-            Assistant(
-                id=assistant.id,
-                name=assistant.name,
-                color=assistant.color,
-                constraints=constraints,
-                active=assistant.active,
-            )
-        )
+        legacy = legacy_by_id.get(assistant.id)
+        if legacy:
+            legacy_constraints = _constraints_from_dict(legacy, assistant.id)
+            # Max/Min nur uebernehmen, solange das Team noch Defaults hat
+            if _is_default_constraints(assistant.constraints):
+                assistant.constraints.max_consecutive_days = legacy_constraints.max_consecutive_days
+                assistant.constraints.min_block_days = legacy_constraints.min_block_days
+            # Datumsbasierte Abwesenheiten additiv vereinigen: Daten sind
+            # absolut, so geht aus keiner alten Monatsdatei etwas verloren
+            merged = absence_days(assistant.constraints) | absence_days(legacy_constraints)
+            set_absence_days(assistant.constraints, merged)
+        if assistant.id in targets:
+            assistant.constraints.target_shifts = targets[assistant.id]
+        else:
+            assistant.constraints.target_shifts = None
 
     return MonthPlan(
         year=year,
         month=month,
         schedule=_schedule_from_dict(data.get("schedule", {})),
-        assistants=loaded_assistants,
+        assistants=assistants,
         seed=data.get("seed"),
         created_at=data.get("created_at", ""),
         modified_at=data.get("modified_at", ""),

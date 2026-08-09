@@ -7,8 +7,8 @@ Dateien nach einem Programm-Update weiter funktionieren.
 """
 from __future__ import annotations
 
-CURRENT_TEAM_VERSION = 2
-CURRENT_PLAN_VERSION = 2
+CURRENT_TEAM_VERSION = 3
+CURRENT_PLAN_VERSION = 3
 CURRENT_SETTINGS_VERSION = 2
 
 
@@ -21,7 +21,20 @@ def migrate_team(data) -> dict:
 
     if version < 2:
         # v1 -> v2: nur Umhuellung in ein Objekt, Eintraege unveraendert
-        data["version"] = 2
+        version = 2
+
+    if version < 3:
+        # v2 -> v3: personenbezogene Constraints (Urlaube, Einzeltage,
+        # Max. Folge, Min. Block) wandern monatsuebergreifend in team.json
+        for assistant in data.get("assistants", []):
+            assistant.setdefault("constraints", {
+                "assistant_id": assistant.get("id", ""),
+                "unavailable_dates": [],
+                "vacation_ranges": [],
+                "max_consecutive_days": 3,
+                "min_block_days": 1,
+            })
+        version = 3
 
     data["version"] = CURRENT_TEAM_VERSION
     return data
@@ -41,7 +54,21 @@ def migrate_plan(data: dict) -> dict:
         # Constraints direkt im Plan
         for assistant in data.get("assistants", []):
             assistant.get("constraints", {}).setdefault("min_block_days", 1)
-        data["version"] = 2
+        version = 2
+
+    if version < 3:
+        # v2 -> v3: nur die (monatsbezogenen) Soll-Dienste bleiben im Plan
+        # ("targets"); die uebrigen Constraints ziehen nach team.json um.
+        # Die Alt-Constraints bleiben als legacy_constraints erhalten, damit
+        # load_plan() sie einmalig in ein noch leeres Team uebernehmen kann.
+        old_constraints = data.pop("constraints", [])
+        data.setdefault("targets", {
+            c.get("assistant_id", ""): c.get("target_shifts")
+            for c in old_constraints
+        })
+        if old_constraints:
+            data["legacy_constraints"] = old_constraints
+        version = 3
 
     data["version"] = CURRENT_PLAN_VERSION
     return data

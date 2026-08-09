@@ -1,51 +1,16 @@
 {
-  "version": 2,
+  "version": 3,
   "year": 2026,
   "month": 9,
   "schedule": {},
-  "constraints": [
-    {
-      "assistant_id": "f1f04d0e",
-      "unavailable_dates": [],
-      "vacation_ranges": [],
-      "max_consecutive_days": 3,
-      "min_block_days": 1,
-      "target_shifts": null
-    },
-    {
-      "assistant_id": "4a0921a3",
-      "unavailable_dates": [],
-      "vacation_ranges": [],
-      "max_consecutive_days": 3,
-      "min_block_days": 1,
-      "target_shifts": null
-    },
-    {
-      "assistant_id": "312442c2",
-      "unavailable_dates": [],
-      "vacation_ranges": [],
-      "max_consecutive_days": 3,
-      "min_block_days": 1,
-      "target_shifts": null
-    },
-    {
-      "assistant_id": "4874d6d5",
-      "unavailable_dates": [],
-      "vacation_ranges": [],
-      "max_consecutive_days": 3,
-      "min_block_days": 1,
-      "target_shifts": null
-    },
-    {
-      "assistant_id": "b0c044de",
-      "unavailable_dates": [],
-      "vacation_ranges": [],
-      "max_consecutive_days": 3,
-      "min_block_days": 1,
-      "target_shifts": null
-    }
-  ],
+  "targets": {
+    "f1f04d0e": null,
+    "4a0921a3": null,
+    "312442c2": null,
+    "4874d6d5": null,
+    "b0c044de": null
+  },
   "seed": null,
   "created_at": "2026-08-09T15:16:40.424285",
-  "modified_at": "2026-08-09T15:59:21.051076"
+  "modified_at": "2026-08-09T17:45:35.450387"
 }

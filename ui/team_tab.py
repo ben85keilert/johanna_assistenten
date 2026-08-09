@@ -11,6 +11,7 @@ from models import (
     Assistant, AssistantConstraints, MonthPlan, absence_days, set_absence_days
 )
 from datetime import date, timedelta
+import calendar
 import uuid
 
 from . import theme
@@ -28,7 +29,34 @@ class TeamTab(QWidget):
         self._steppers = {}  # (assistant_id, field) -> BigStepper
         self.init_ui()
 
+    def _init_filter_bar(self):
+        """Filter fuer die Urlaubsliste; sitzt in der Tab-Zeile (Corner-Widget),
+        sichtbar solange der Team-Tab aktiv ist."""
+        self.top_bar = QWidget()
+        layout = QHBoxLayout()
+        layout.setContentsMargins(0, 0, 8, 0)
+
+        layout.addWidget(QLabel("Urlaube:"))
+        self.filter_person_combo = QComboBox()
+        self.filter_person_combo.currentIndexChanged.connect(self.refresh_vacations)
+        layout.addWidget(self.filter_person_combo)
+
+        self.filter_month_combo = QComboBox()
+        self.filter_month_combo.currentIndexChanged.connect(self.refresh_vacations)
+        layout.addWidget(self.filter_month_combo)
+
+        self.show_past_btn = QPushButton("Vergangene anzeigen")
+        self.show_past_btn.setCheckable(True)
+        self.show_past_btn.setToolTip(
+            "Bereits abgelaufene Urlaube ein-/ausblenden"
+        )
+        self.show_past_btn.toggled.connect(self.refresh_vacations)
+        layout.addWidget(self.show_past_btn)
+
+        self.top_bar.setLayout(layout)
+
     def init_ui(self):
+        self._init_filter_bar()
         layout = QVBoxLayout()
 
         # Buttons
@@ -255,20 +283,89 @@ class TeamTab(QWidget):
 
     # --- Urlaube ---
 
+    def _all_absences(self) -> list[tuple]:
+        """Alle Abwesenheiten aller Helfer als (start, end, assistant),
+        chronologisch: Urlaubszeitraeume und einzelne Urlaubstage."""
+        absences = []
+        for assistant in self.plan.assistants:
+            for start, end in assistant.constraints.vacation_ranges:
+                absences.append((start, end, assistant))
+            for d in assistant.constraints.unavailable_dates:
+                absences.append((d, d, assistant))
+        absences.sort(key=lambda v: (v[0], v[1], v[2].name))
+        return absences
+
+    def _refresh_filter_combos(self, absences: list[tuple]):
+        """Befuellt Personen- und Monatsfilter neu, Auswahl bleibt erhalten."""
+        person_combo, month_combo = self.filter_person_combo, self.filter_month_combo
+        selected_person = person_combo.currentData()
+        selected_month = month_combo.currentData()
+
+        person_combo.blockSignals(True)
+        person_combo.clear()
+        person_combo.addItem("Alle Helfer", None)
+        for assistant in self.plan.assistants:
+            pixmap = QPixmap(12, 12)
+            pixmap.fill(QColor(assistant.color))
+            person_combo.addItem(pixmap, assistant.name, assistant.id)
+        index = person_combo.findData(selected_person)
+        person_combo.setCurrentIndex(index if index >= 0 else 0)
+        person_combo.blockSignals(False)
+
+        months = []
+        for start, end, _ in absences:
+            cursor = date(start.year, start.month, 1)
+            while cursor <= end:
+                if (cursor.year, cursor.month) not in months:
+                    months.append((cursor.year, cursor.month))
+                cursor = date(
+                    cursor.year + (cursor.month == 12),
+                    cursor.month % 12 + 1, 1,
+                )
+        months.sort()
+
+        month_names = ["", "Januar", "Februar", "Maerz", "April", "Mai", "Juni",
+                       "Juli", "August", "September", "Oktober", "November", "Dezember"]
+        month_combo.blockSignals(True)
+        month_combo.clear()
+        month_combo.addItem("Alle Monate", None)
+        for year, month in months:
+            # String statt Tupel: findData vergleicht Strings zuverlaessig
+            month_combo.addItem(f"{month_names[month]} {year}", f"{year:04d}-{month:02d}")
+        index = month_combo.findData(selected_month)
+        month_combo.setCurrentIndex(index if index >= 0 else 0)
+        month_combo.blockSignals(False)
+
     def refresh_vacations(self):
-        """Alle Urlaubszeitraeume aller Helfer, chronologisch nach Beginn."""
+        """Urlaubsliste: gefiltert nach Person/Monat, Vergangenes optional."""
         self.vacation_list.clear()
         if not self.plan:
             return
 
-        vacations = []
-        for assistant in self.plan.assistants:
-            for start, end in assistant.constraints.vacation_ranges:
-                vacations.append((start, end, assistant))
-        vacations.sort(key=lambda v: (v[0], v[1]))
+        absences = self._all_absences()
+        self._refresh_filter_combos(absences)
 
-        for start, end, assistant in vacations:
-            text = "{:%d.%m.%Y} - {:%d.%m.%Y}   {}".format(start, end, assistant.name)
+        person_filter = self.filter_person_combo.currentData()
+        month_filter = self.filter_month_combo.currentData()
+        show_past = self.show_past_btn.isChecked()
+        today = date.today()
+
+        for start, end, assistant in absences:
+            if person_filter is not None and assistant.id != person_filter:
+                continue
+            if month_filter is not None:
+                year, month = int(month_filter[:4]), int(month_filter[5:7])
+                month_start = date(year, month, 1)
+                month_end = date(year, month, calendar.monthrange(year, month)[1])
+                if end < month_start or start > month_end:
+                    continue
+            if not show_past and end < today:
+                continue
+
+            if start == end:
+                text = "{:%d.%m.%Y}   {}".format(start, assistant.name)
+            else:
+                text = "{:%d.%m.%Y} - {:%d.%m.%Y}   {}".format(start, end, assistant.name)
             item = QListWidgetItem(text)
             item.setData(
                 Qt.ItemDataRole.UserRole,
@@ -355,6 +452,16 @@ class TeamTab(QWidget):
             d += timedelta(days=1)
         set_absence_days(assistant.constraints, days)
 
+    def _remove_absence(self, assistant: Assistant, start: date, end: date):
+        """Entfernt einen Listeneintrag: Einzeltag oder Zeitraum."""
+        if assistant is None:
+            return
+        c = assistant.constraints
+        if start == end and start in c.unavailable_dates:
+            c.unavailable_dates.remove(start)
+        elif (start, end) in c.vacation_ranges:
+            c.vacation_ranges.remove((start, end))
+
     def add_vacation(self):
         if not self.plan or not self.plan.assistants:
             QMessageBox.warning(self, "Warnung", "Bitte zuerst Helfer anlegen.")
@@ -385,9 +492,7 @@ class TeamTab(QWidget):
             return
         new_id, new_start, new_end = result
 
-        old_assistant = self._assistant_by_id(old_id)
-        if old_assistant and (old_start, old_end) in old_assistant.constraints.vacation_ranges:
-            old_assistant.constraints.vacation_ranges.remove((old_start, old_end))
+        self._remove_absence(self._assistant_by_id(old_id), old_start, old_end)
         self._add_range(self._assistant_by_id(new_id), new_start, new_end)
         self.refresh_vacations()
         self.assistants_changed.emit()
@@ -399,9 +504,10 @@ class TeamTab(QWidget):
             return
 
         assistant_id, start_iso, end_iso = item.data(Qt.ItemDataRole.UserRole)
-        target = (date.fromisoformat(start_iso), date.fromisoformat(end_iso))
-        assistant = self._assistant_by_id(assistant_id)
-        if assistant and target in assistant.constraints.vacation_ranges:
-            assistant.constraints.vacation_ranges.remove(target)
+        self._remove_absence(
+            self._assistant_by_id(assistant_id),
+            date.fromisoformat(start_iso),
+            date.fromisoformat(end_iso),
+        )
         self.refresh_vacations()
         self.assistants_changed.emit()

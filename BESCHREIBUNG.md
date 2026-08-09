@@ -83,10 +83,13 @@ Zwei Tabs:
    Max. Folge und Min. Block werden direkt in der Tabelle** mit Minus/Plus-Buttons
    gestellt (Min. Block und Max. Folge halten sich dabei automatisch konsistent);
    der Einschränkungen-Dialog bleibt für nicht verfügbare Einzeltage per Kalender.
-   Darunter die **Urlaubsübersicht**: alle Urlaube aller Helfer chronologisch
-   sortiert; Hinzufügen, **Bearbeiten** (Button oder Doppelklick) und Entfernen
-   über Dialoge mit Kalender-Datumsfeldern. Überlappende oder angrenzende
-   Zeiträume verschmelzen automatisch.
+   Darunter die **Urlaubsübersicht**: alle Abwesenheiten aller Helfer
+   chronologisch sortiert — Zeiträume **und Einzeltage**, monatsübergreifend.
+   Hinzufügen, **Bearbeiten** (Button oder Doppelklick) und Entfernen über
+   Dialoge mit Kalender-Datumsfeldern; überlappende oder angrenzende Zeiträume
+   verschmelzen automatisch. In der Tab-Zeile (solange der Team-Tab aktiv ist):
+   **Filter** nach Person und Monat sowie „Vergangene anzeigen" — abgelaufene
+   Urlaube sind standardmäßig ausgeblendet.
 
 ### Generier-Zyklus: Fixieren und Neuwürfeln
 
@@ -114,37 +117,40 @@ her (zuletzt geöffneter Monat, Fenstergröße).
 
 ### `data/team.json` — das Team (monatsübergreifend)
 
+Enthält neben Name/Farbe auch die **personenbezogenen Einschränkungen**: Urlaube
+und Einzeltage (datumsbasiert, gelten in jedem berührten Monat — auch
+monatsübergreifende Urlaube), Max. Folge und Min. Block:
+
 ```json
 {
-  "version": 2,
+  "version": 3,
   "assistants": [
-    { "id": "f1f04d0e", "name": "Martha", "color": "#3498DB", "active": true }
+    { "id": "f1f04d0e", "name": "Martha", "color": "#3498DB", "active": true,
+      "constraints": {
+        "assistant_id": "f1f04d0e",
+        "unavailable_dates": ["2026-08-15"],
+        "vacation_ranges": [["2026-08-28", "2026-09-05"]],
+        "max_consecutive_days": 3,
+        "min_block_days": 1 } }
   ]
 }
 ```
 
 ### `data/plans/plan_JJJJ_MM.json` — ein Plan pro Monat
 
-Enthält den Dienstplan des Monats und die **monatsbezogenen** Einschränkungen der
-Helfer (Urlaube, Ziel-Dienste usw.):
+Enthält den Dienstplan des Monats und als einzige monatsbezogene Vorgabe die
+**Soll-Dienste** (`targets`) je Helfer:
 
 ```json
 {
-  "version": 2,
+  "version": 3,
   "year": 2026,
   "month": 8,
   "schedule": {
     "1": [ { "assistant_id": "f1f04d0e", "shift_type": "FULL",
              "locked": true, "generated": false } ]
   },
-  "constraints": [
-    { "assistant_id": "f1f04d0e",
-      "unavailable_dates": ["2026-08-15"],
-      "vacation_ranges": [["2026-08-20", "2026-08-27"]],
-      "max_consecutive_days": 3,
-      "min_block_days": 1,
-      "target_shifts": null }
-  ],
+  "targets": { "f1f04d0e": null },
   "seed": 42,
   "created_at": "…", "modified_at": "…"
 }

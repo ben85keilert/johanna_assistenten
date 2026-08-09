@@ -37,6 +37,9 @@ WEEKDAYS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
 # Feste Spalten vor den Tagesspalten: Soll + Belegt
 DAY_COL_OFFSET = 2
 
+# Hintergrund der grauen Kopf-Zeilen in der geteilten Ansicht
+SEPARATOR_BG = QColor(215, 215, 215)
+
 
 class PlanTab(QWidget):
     plan_modified = Signal()
@@ -134,7 +137,7 @@ class PlanTab(QWidget):
         self.deterministic_check.setChecked(self.settings.deterministic)
         self.deterministic_check.setToolTip(
             "An: gleicher Seed + gleiche Fixpunkte ergeben immer denselben Plan "
-            "(reproduzierbar). Aus: jeder Klick auf Neu wuerfeln wuerfelt anders."
+            "(reproduzierbar). Aus: jeder Klick auf Neu wuerfeln anders."
         )
         self.deterministic_check.toggled.connect(self.on_deterministic_toggled)
         dice_layout.addWidget(self.deterministic_check)
@@ -338,6 +341,19 @@ class PlanTab(QWidget):
         self.plan_modified.emit()
         self.constraints_changed.emit()
 
+    def _fill_day_header_row(self, row: int, first_day: int, days_in_month: int):
+        """Graue Kopf-Zeile im Tabellenkoerper: einzeilig fett "1 Sa", "2 So"…"""
+        bold = QFont()
+        bold.setBold(True)
+        for col in range(self.table.columnCount()):
+            day = col - DAY_COL_OFFSET + first_day
+            item = self._make_inert_item(SEPARATOR_BG)
+            if col >= DAY_COL_OFFSET and day <= days_in_month:
+                item.setText(self._day_header(day).replace("\n", " "))
+                item.setFont(bold)
+                item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.table.setItem(row, col, item)
+
     def rebuild_grid(self):
         if not self.plan:
             return
@@ -351,29 +367,36 @@ class PlanTab(QWidget):
 
         split = self.settings.split_view
         half = math.ceil(days_in_month / 2) if split else days_in_month
+        # Bei geteilter Ansicht bekommt jede Haelfte eine eigene graue
+        # Kopf-Zeile im Tabellenkoerper; Gruppe 1 beginnt dann bei Zeile 1
+        self._group1_row_offset = 1 if split else 0
 
         self.table.clear()
         self.table.setColumnCount(DAY_COL_OFFSET + half)
-        self.table.setRowCount(n * 2 + 1 if split else n)
+        self.table.setRowCount(n * 2 + 2 if split else n)
 
-        # Spaltenkoepfe: feste Spalten + Tage der ersten Haelfte
+        # Spaltenkoepfe: feste Spalten; Tages-Labels nur in der breiten
+        # Ansicht (geteilt uebernehmen das die grauen Kopf-Zeilen)
         header_labels = ["Soll", "Belegt\nV|VM|NM"]
         for day in range(1, half + 1):
-            header_labels.append(self._day_header(day))
+            header_labels.append("" if split else self._day_header(day))
         self.table.setHorizontalHeaderLabels(header_labels)
 
         # Zeilenkoepfe: Helfernamen (bei geteilter Ansicht zweimal)
         row_labels = [a.name for a in assistants]
         if split:
-            row_labels += [""] + [a.name for a in assistants]
+            row_labels = [""] + row_labels + [""] + [a.name for a in assistants]
         self.table.setVerticalHeaderLabels(row_labels)
-
-        separator_bg = QColor(215, 215, 215)
 
         self.table.verticalHeader().setDefaultSectionSize(theme.ROW_HEIGHT)
 
+        off = self._group1_row_offset
+        if split:
+            self._fill_day_header_row(0, first_day=1, days_in_month=days_in_month)
+
         # Erste Haelfte (bzw. ganzer Monat)
-        for row, assistant in enumerate(assistants):
+        for i, assistant in enumerate(assistants):
+            row = off + i
             stepper = self._make_target_stepper(assistant)
             self._target_spins[assistant.id] = stepper
             self.table.setCellWidget(row, 0, stepper)
@@ -385,22 +408,12 @@ class PlanTab(QWidget):
                 self.table.setItem(row, col, self._make_day_item(assistant.id, day))
 
         if split:
-            # Trennzeile mit den Tageskoepfen der zweiten Haelfte
-            sep_row = n
-            bold = QFont()
-            bold.setBold(True)
-            for col in range(self.table.columnCount()):
-                day = col - DAY_COL_OFFSET + 1 + half
-                item = self._make_inert_item(separator_bg)
-                if col >= DAY_COL_OFFSET and day <= days_in_month:
-                    item.setText(self._day_header(day).replace("\n", " "))
-                    item.setFont(bold)
-                    item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-                self.table.setItem(sep_row, col, item)
+            # Kopf-Zeile der zweiten Haelfte
+            self._fill_day_header_row(off + n, first_day=half + 1, days_in_month=days_in_month)
 
             # Zweite Haelfte
             for i, assistant in enumerate(assistants):
-                row = n + 1 + i
+                row = off + n + 1 + i
                 self.table.setItem(row, 0, self._make_inert_item())
                 self.table.setItem(row, 1, self._make_inert_item())
                 for col in range(DAY_COL_OFFSET, DAY_COL_OFFSET + half):
@@ -408,7 +421,7 @@ class PlanTab(QWidget):
                     if day <= days_in_month:
                         self.table.setItem(row, col, self._make_day_item(assistant.id, day))
                     else:
-                        self.table.setItem(row, col, self._make_inert_item(separator_bg))
+                        self.table.setItem(row, col, self._make_inert_item(SEPARATOR_BG))
 
         header = self.table.horizontalHeader()
         header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
@@ -435,8 +448,9 @@ class PlanTab(QWidget):
         if not self.plan:
             return
         # Belegt-Spalte (nur obere Zeilengruppe)
-        for row, assistant in enumerate(self.plan.assistants):
-            item = self.table.item(row, 1)
+        off = getattr(self, "_group1_row_offset", 0)
+        for i, assistant in enumerate(self.plan.assistants):
+            item = self.table.item(off + i, 1)
             if item:
                 full, vm, nm = self._shift_counts(assistant.id)
                 item.setText(f"{full} | {vm} | {nm}")

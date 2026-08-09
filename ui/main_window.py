@@ -1,4 +1,6 @@
-from PySide6.QtWidgets import QMainWindow, QTabWidget, QStatusBar, QWidget, QVBoxLayout
+from PySide6.QtWidgets import (
+    QMainWindow, QTabWidget, QStatusBar, QWidget, QVBoxLayout, QStackedWidget
+)
 from PySide6.QtCore import Qt
 
 from .control_bar import ControlBar
@@ -15,6 +17,13 @@ class MainWindow(QMainWindow):
         self._title_plan = ""
 
         self.tab_widget = QTabWidget()
+
+        # Dynamische Leiste in der Tab-Zeile: zeigt je nach aktivem Tab
+        # dessen top_bar (Dienstplan: Jahr/Monat/Ansicht, Team: Urlaubsfilter)
+        self._corner_stack = QStackedWidget()
+        self._corner_pages = {}  # tab -> top_bar
+        self.tab_widget.setCornerWidget(self._corner_stack, Qt.Corner.TopRightCorner)
+        self.tab_widget.currentChanged.connect(self._sync_corner_bar)
 
         # Zentrale Werte-Steuerleiste zwischen Menue und Tabs
         self.control_bar = ControlBar(self._steppers_in_current_tab)
@@ -53,17 +62,27 @@ class MainWindow(QMainWindow):
             return (p.y(), p.x())
         return sorted(steppers, key=position)
 
+    def _register_top_bar(self, tab):
+        if hasattr(tab, "top_bar"):
+            self._corner_pages[tab] = tab.top_bar
+            self._corner_stack.addWidget(tab.top_bar)
+        self._sync_corner_bar()
+
+    def _sync_corner_bar(self, *_):
+        page = self._corner_pages.get(self.tab_widget.currentWidget())
+        if page is not None:
+            self._corner_stack.setCurrentWidget(page)
+
     def set_plan_tab(self, tab):
         self.plan_tab = tab
         self.tab_widget.insertTab(0, tab, "Dienstplan")
         self.tab_widget.setCurrentIndex(0)
-        # Monats-/Ansichtswahl in die Tab-Zeile setzen (spart eine Zeile)
-        if hasattr(tab, "top_bar"):
-            self.tab_widget.setCornerWidget(tab.top_bar, Qt.Corner.TopRightCorner)
+        self._register_top_bar(tab)
 
     def set_team_tab(self, tab):
         self.team_tab = tab
         self.tab_widget.addTab(tab, "Team")
+        self._register_top_bar(tab)
 
     def set_title_plan(self, year: int, month: int):
         self._title_plan = f"Plan {year}-{month:02d}"
