@@ -1,4 +1,5 @@
 from PySide6.QtWidgets import QMainWindow, QTabWidget, QStatusBar, QWidget, QVBoxLayout
+from PySide6.QtCore import Qt
 
 from .control_bar import ControlBar
 from .widgets.big_stepper import BigStepper
@@ -56,6 +57,9 @@ class MainWindow(QMainWindow):
         self.plan_tab = tab
         self.tab_widget.insertTab(0, tab, "Dienstplan")
         self.tab_widget.setCurrentIndex(0)
+        # Monats-/Ansichtswahl in die Tab-Zeile setzen (spart eine Zeile)
+        if hasattr(tab, "top_bar"):
+            self.tab_widget.setCornerWidget(tab.top_bar, Qt.Corner.TopRightCorner)
 
     def set_team_tab(self, tab):
         self.team_tab = tab

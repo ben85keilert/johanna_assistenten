@@ -92,8 +92,8 @@ Zwei Tabs:
 
 1. Man setzt zuerst die **Fixpunkte** von Hand (z. B. „Martha kommt am 1.–2. VOLL,
    am 3. nur VM"). Manuell Gesetztes bleibt immer stehen.
-2. **Generieren** füllt die restlichen Tage zufällig, unter Beachtung aller Regeln.
-   Zufällig vergebene Dienste tragen einen **Punkt**.
+2. **Neu würfeln** füllt die restlichen Tage zufällig, unter Beachtung aller
+   Regeln. Zufällig vergebene Dienste tragen einen **Punkt**.
 3. Was gefällt, **fixiert** man per Klick (Fixieren-Stempel oder Rechtsklick).
    **Farblogik: fixierte Einträge sind kräftig gefärbt und tragen ein Schloss,
    nicht fixierte sind blasser.**
@@ -101,7 +101,7 @@ Zwei Tabs:
    „Generieren" immer denselben Plan (reproduzierbar); ohne Häkchen würfelt jeder
    Klick anders.
 4. Was nicht gefällt, bleibt unfixiert und wird beim nächsten Klick auf
-   „Generieren" **neu gewürfelt**. Schritte 3–4 wiederholt man, bis der Plan passt.
+   „Neu würfeln" **neu vergeben**. Schritte 3–4 wiederholt man, bis der Plan passt.
 
 Endet ein manuell gesetzter Block mit einem halben Tag (z. B. Tag 3 nur VM), vergibt
 der Generator die fehlende Tageshälfte (NM) an eine andere Person.

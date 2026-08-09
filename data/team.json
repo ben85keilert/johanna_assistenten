@@ -4,31 +4,31 @@
     {
       "id": "f1f04d0e",
       "name": "Martha",
-      "color": "#3498DB",
+      "color": "#62a0ea",
       "active": true
     },
     {
       "id": "4a0921a3",
       "name": "Jürgen",
-      "color": "#ff5500",
+      "color": "#ffa348",
       "active": true
     },
     {
       "id": "312442c2",
       "name": "Bertha",
-      "color": "#aaff00",
+      "color": "#57e389",
       "active": true
     },
     {
       "id": "4874d6d5",
       "name": "Dora",
-      "color": "#9B59B6",
+      "color": "#f8e45c",
       "active": true
     },
     {
       "id": "b0c044de",
       "name": "Neuer Helfer",
-      "color": "#3498DB",
+      "color": "#c061cb",
       "active": true
     }
   ]

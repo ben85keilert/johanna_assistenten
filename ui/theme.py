@@ -50,6 +50,18 @@ QTabBar::tab {{
 QHeaderView::section {{
     padding: 4px;
 }}
+QGroupBox {{
+    border: 1px solid #9a9a9a;
+    border-radius: 8px;
+    margin-top: 10px;
+    padding: 4px 6px 2px 6px;
+}}
+QGroupBox::title {{
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    left: 12px;
+    padding: 0 4px;
+}}
 """
 
 

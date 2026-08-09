@@ -1,7 +1,8 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QTableWidget,
     QTableWidgetItem, QLabel, QSpinBox, QCheckBox, QMessageBox,
-    QHeaderView, QMenu, QAbstractItemView, QButtonGroup, QComboBox
+    QHeaderView, QMenu, QAbstractItemView, QButtonGroup, QComboBox,
+    QGroupBox
 )
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QFont
@@ -55,9 +56,13 @@ class PlanTab(QWidget):
     def init_ui(self):
         layout = QVBoxLayout()
 
-        # Monatswahl + Ansichtsumschaltung
+        # Monatswahl + Ansichtsumschaltung: wird von MainWindow neben die
+        # Tab-Reiter gesetzt (Ecke der Tab-Leiste), nicht ins eigene Layout
+        self.top_bar = QWidget()
         top_layout = QHBoxLayout()
+        top_layout.setContentsMargins(0, 0, 8, 0)
         self.month_selector = MonthSelector()
+        self.month_selector.layout().setContentsMargins(0, 0, 0, 0)
         self.month_selector.month_changed.connect(self.month_change_requested.emit)
         top_layout.addWidget(self.month_selector)
 
@@ -68,12 +73,13 @@ class PlanTab(QWidget):
         self.view_combo.setCurrentIndex(1 if self.settings.split_view else 0)
         self.view_combo.currentIndexChanged.connect(self.on_view_changed)
         top_layout.addWidget(self.view_combo)
-        top_layout.addStretch()
-        layout.addLayout(top_layout)
+        self.top_bar.setLayout(top_layout)
 
-        # Stempel-Leiste
+        # Eine Werkzeugzeile: zwei umrandete Gruppen (Stempel | Wuerfeln)
+        tools_layout = QHBoxLayout()
+
+        stamp_box = QGroupBox("Stempel")
         stamp_layout = QHBoxLayout()
-        stamp_layout.addWidget(QLabel("Stempel:"))
         self.stamp_group = QButtonGroup(self)
         self.stamp_group.setExclusive(False)
         self.stamp_buttons = {}
@@ -93,49 +99,50 @@ class PlanTab(QWidget):
             self.stamp_buttons[stamp] = btn
             stamp_layout.addWidget(btn)
 
-        self.confirm_check = QCheckBox("Beim Ueberschreiben nachfragen")
+        self.confirm_check = QCheckBox("Nachfragen")
+        self.confirm_check.setToolTip("Beim Ueberschreiben vorhandener Eintraege nachfragen")
         self.confirm_check.setChecked(self.settings.confirm_overwrite)
         self.confirm_check.toggled.connect(self.on_confirm_toggled)
         stamp_layout.addWidget(self.confirm_check)
+        stamp_box.setLayout(stamp_layout)
+        tools_layout.addWidget(stamp_box)
 
-        stamp_layout.addStretch()
-        layout.addLayout(stamp_layout)
+        dice_box = QGroupBox("Wuerfeln")
+        dice_layout = QHBoxLayout()
 
-        # Generierung
-        options_layout = QHBoxLayout()
-
-        self.generate_btn = QPushButton("Generieren / Neu wuerfeln")
+        self.generate_btn = QPushButton("Neu wuerfeln")
         self.generate_btn.setToolTip(
             "Fuellt freie Tage zufaellig. Manuell Gesetztes und Fixiertes "
             "bleibt stehen, nicht fixierte Zufalls-Eintraege werden neu vergeben."
         )
         self.generate_btn.clicked.connect(self.generate_schedule)
-        options_layout.addWidget(self.generate_btn)
+        dice_layout.addWidget(self.generate_btn)
 
         self.reset_btn = QPushButton("Zuruecksetzen")
         self.reset_btn.setToolTip("Loescht alle nicht fixierten Eintraege.")
         self.reset_btn.clicked.connect(self.reset_schedule)
-        options_layout.addWidget(self.reset_btn)
+        dice_layout.addWidget(self.reset_btn)
 
-        options_layout.addSpacing(20)
-        options_layout.addWidget(QLabel("Seed:"))
+        dice_layout.addWidget(QLabel("Seed:"))
         self.seed_spin = QSpinBox()
         self.seed_spin.setRange(0, 999999)
         self.seed_spin.setValue(self.settings.seed)
         self.seed_spin.valueChanged.connect(self.on_seed_changed)
-        options_layout.addWidget(self.seed_spin)
+        dice_layout.addWidget(self.seed_spin)
 
         self.deterministic_check = QCheckBox("Deterministisch")
         self.deterministic_check.setChecked(self.settings.deterministic)
         self.deterministic_check.setToolTip(
             "An: gleicher Seed + gleiche Fixpunkte ergeben immer denselben Plan "
-            "(reproduzierbar). Aus: jeder Klick auf Generieren wuerfelt anders."
+            "(reproduzierbar). Aus: jeder Klick auf Neu wuerfeln wuerfelt anders."
         )
         self.deterministic_check.toggled.connect(self.on_deterministic_toggled)
-        options_layout.addWidget(self.deterministic_check)
+        dice_layout.addWidget(self.deterministic_check)
+        dice_box.setLayout(dice_layout)
+        tools_layout.addWidget(dice_box)
 
-        options_layout.addStretch()
-        layout.addLayout(options_layout)
+        tools_layout.addStretch()
+        layout.addLayout(tools_layout)
 
         # Tabelle
         self.table = QTableWidget()

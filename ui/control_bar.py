@@ -42,6 +42,7 @@ class ControlBar(QFrame):
             btn.clicked.connect(handler)
             return btn
 
+        # Alle vier Buttons nebeneinander oben links
         self.prev_btn = make_button("◀", lambda: self._navigate(-1))
         self.prev_btn.setToolTip("Vorheriges Wertefeld")
         layout.addWidget(self.prev_btn)
@@ -50,10 +51,7 @@ class ControlBar(QFrame):
         self.next_btn.setToolTip("Naechstes Wertefeld")
         layout.addWidget(self.next_btn)
 
-        self.info_label = QLabel()
-        self.info_label.setFont(big_font)
-        self.info_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(self.info_label, stretch=1)
+        layout.addSpacing(12)
 
         self.down_btn = make_button("▼", lambda: self._step(-1), autorepeat=True)
         self.down_btn.setToolTip("Wert verkleinern")
@@ -62,6 +60,14 @@ class ControlBar(QFrame):
         self.up_btn = make_button("▲", lambda: self._step(1), autorepeat=True)
         self.up_btn.setToolTip("Wert vergroessern")
         layout.addWidget(self.up_btn)
+
+        self.info_label = QLabel()
+        self.info_label.setFont(big_font)
+        self.info_label.setAlignment(
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+        )
+        layout.addSpacing(16)
+        layout.addWidget(self.info_label, stretch=1)
 
         self.setLayout(layout)
         self._refresh()
