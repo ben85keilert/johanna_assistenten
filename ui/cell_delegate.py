@@ -44,10 +44,10 @@ class CellDelegate(QStyledItemDelegate):
 
         painter.save()
 
-        # Hintergrund
+        # Hintergrund: fixierte Eintraege kraeftig, nicht fixierte blasser
         if entry is not None and assistant is not None:
             background = QColor(assistant.color)
-            if entry.generated:
+            if not entry.locked:
                 background = background.lighter(150)
         elif unavailable:
             background = UNAVAILABLE_COLOR

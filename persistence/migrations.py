@@ -9,7 +9,7 @@ from __future__ import annotations
 
 CURRENT_TEAM_VERSION = 2
 CURRENT_PLAN_VERSION = 2
-CURRENT_SETTINGS_VERSION = 1
+CURRENT_SETTINGS_VERSION = 2
 
 
 def migrate_team(data) -> dict:
@@ -48,5 +48,12 @@ def migrate_plan(data: dict) -> dict:
 
 
 def migrate_settings(data: dict) -> dict:
+    version = data.get("version", 1)
+
+    if version < 2:
+        # v1 -> v2: geteilte Kalenderansicht (zwei Monatshaelften untereinander)
+        data.setdefault("split_view", False)
+        data["version"] = 2
+
     data["version"] = CURRENT_SETTINGS_VERSION
     return data

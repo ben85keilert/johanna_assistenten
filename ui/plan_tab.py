@@ -1,17 +1,20 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QTableWidget,
     QTableWidgetItem, QLabel, QSpinBox, QCheckBox, QMessageBox,
-    QHeaderView, QMenu, QAbstractItemView, QButtonGroup
+    QHeaderView, QMenu, QAbstractItemView, QButtonGroup, QComboBox,
+    QAbstractSpinBox
 )
 from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QColor, QFont
 
 from models import MonthPlan, ShiftEntry, ShiftType
 from persistence import AppSettings
 from datetime import date
 import calendar
+import math
 from .widgets.month_selector import MonthSelector
 from .cell_delegate import CellDelegate
-from scheduling.engine import generate, shift_weight
+from scheduling.engine import generate
 from scheduling.validator import validate
 
 # Stempel-Modi
@@ -27,6 +30,11 @@ STAMP_SHIFTS = {
     STAMP_NM: ShiftType.HALF_AFTERNOON,
 }
 
+WEEKDAYS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
+
+# Feste Spalten vor den Tagesspalten: Soll + Belegt
+DAY_COL_OFFSET = 2
+
 
 class PlanTab(QWidget):
     plan_modified = Signal()
@@ -37,15 +45,28 @@ class PlanTab(QWidget):
         self.plan: MonthPlan | None = None
         self.settings = settings
         self.active_stamp: str | None = None
+        self._assistant_by_id = {}
+        self._target_spins = {}  # assistant_id -> QSpinBox
         self.init_ui()
 
     def init_ui(self):
         layout = QVBoxLayout()
 
-        # Monatswahl
+        # Monatswahl + Ansichtsumschaltung
+        top_layout = QHBoxLayout()
         self.month_selector = MonthSelector()
         self.month_selector.month_changed.connect(self.month_change_requested.emit)
-        layout.addWidget(self.month_selector)
+        top_layout.addWidget(self.month_selector)
+
+        top_layout.addWidget(QLabel("Ansicht:"))
+        self.view_combo = QComboBox()
+        self.view_combo.addItem("Breit (eine Zeile)", False)
+        self.view_combo.addItem("Zweigeteilt (untereinander)", True)
+        self.view_combo.setCurrentIndex(1 if self.settings.split_view else 0)
+        self.view_combo.currentIndexChanged.connect(self.on_view_changed)
+        top_layout.addWidget(self.view_combo)
+        top_layout.addStretch()
+        layout.addLayout(top_layout)
 
         # Stempel-Leiste
         stamp_layout = QHBoxLayout()
@@ -103,6 +124,10 @@ class PlanTab(QWidget):
 
         self.deterministic_check = QCheckBox("Deterministisch")
         self.deterministic_check.setChecked(self.settings.deterministic)
+        self.deterministic_check.setToolTip(
+            "An: gleicher Seed + gleiche Fixpunkte ergeben immer denselben Plan "
+            "(reproduzierbar). Aus: jeder Klick auf Generieren wuerfelt anders."
+        )
         self.deterministic_check.toggled.connect(self.on_deterministic_toggled)
         options_layout.addWidget(self.deterministic_check)
 
@@ -141,6 +166,10 @@ class PlanTab(QWidget):
     def on_deterministic_toggled(self, checked: bool):
         self.settings.deterministic = checked
 
+    def on_view_changed(self):
+        self.settings.split_view = bool(self.view_combo.currentData())
+        self.rebuild_grid()
+
     # --- Stempel ---
 
     def on_stamp_toggled(self, stamp: str, checked: bool):
@@ -153,10 +182,18 @@ class PlanTab(QWidget):
         elif self.active_stamp == stamp:
             self.active_stamp = None
 
+    def _cell_ref(self, row: int, col: int) -> tuple[str, int] | None:
+        item = self.table.item(row, col)
+        if item is None:
+            return None
+        return item.data(Qt.ItemDataRole.UserRole)
+
     def on_cell_clicked(self, row: int, col: int):
-        if not self.plan or self.active_stamp is None or col == 0:
+        if not self.plan or self.active_stamp is None:
             return
-        self.apply_stamp(self.active_stamp, [(row, col)])
+        ref = self._cell_ref(row, col)
+        if ref:
+            self.apply_stamp(self.active_stamp, [ref])
 
     def _confirm(self, message: str) -> bool:
         if not self.settings.confirm_overwrite:
@@ -185,17 +222,16 @@ class PlanTab(QWidget):
             ShiftEntry(assistant_id=assistant_id, shift_type=shift_type)
         )
 
-    def apply_stamp(self, stamp: str, cells: list[tuple[int, int]]):
-        """Wendet einen Stempel auf Zellen (row, col) an. Gleicher Eintrag ->
-        entfernen, anderer Eintrag -> nach Rueckfrage ueberschreiben."""
+    def apply_stamp(self, stamp: str, cells: list[tuple[str, int]]):
+        """Wendet einen Stempel auf Zellen (assistant_id, day) an. Gleicher
+        Eintrag -> entfernen, anderer Eintrag -> nach Rueckfrage ueberschreiben."""
         if not self.plan:
             return
 
         # Rueckfrage gesammelt fuer alle betroffenen Zellen
         to_overwrite = 0
-        for row, col in cells:
-            assistant_id = self.plan.assistants[row].id
-            entry = self._entry_at(assistant_id, col)
+        for assistant_id, day in cells:
+            entry = self._entry_at(assistant_id, day)
             if stamp in STAMP_SHIFTS and entry and entry.shift_type != STAMP_SHIFTS[stamp]:
                 to_overwrite += 1
             if stamp == STAMP_VACATION and entry:
@@ -206,17 +242,18 @@ class PlanTab(QWidget):
             return
 
         changed = False
-        for row, col in cells:
-            assistant = self.plan.assistants[row]
-            day = col
-            entry = self._entry_at(assistant.id, day)
+        for assistant_id, day in cells:
+            assistant = self._assistant_by_id.get(assistant_id)
+            if assistant is None:
+                continue
+            entry = self._entry_at(assistant_id, day)
 
             if stamp in STAMP_SHIFTS:
                 shift_type = STAMP_SHIFTS[stamp]
                 if entry and entry.shift_type == shift_type:
-                    self._remove_entry(assistant.id, day)
+                    self._remove_entry(assistant_id, day)
                 else:
-                    self._set_entry(assistant.id, day, shift_type)
+                    self._set_entry(assistant_id, day, shift_type)
                 changed = True
 
             elif stamp == STAMP_VACATION:
@@ -226,7 +263,7 @@ class PlanTab(QWidget):
                     unavailable.remove(d)
                 else:
                     if entry:
-                        self._remove_entry(assistant.id, day)
+                        self._remove_entry(assistant_id, day)
                     unavailable.append(d)
                 changed = True
 
@@ -246,6 +283,47 @@ class PlanTab(QWidget):
         self.month_selector.set_month(plan.year, plan.month)
         self.rebuild_grid()
 
+    def _day_header(self, day: int) -> str:
+        weekday = WEEKDAYS[date(self.plan.year, self.plan.month, day).weekday()]
+        return f"{day}\n{weekday}"
+
+    def _make_day_item(self, assistant_id: str, day: int) -> QTableWidgetItem:
+        item = QTableWidgetItem()
+        item.setData(Qt.ItemDataRole.UserRole, (assistant_id, day))
+        return item
+
+    def _make_inert_item(self, background: QColor | None = None) -> QTableWidgetItem:
+        item = QTableWidgetItem()
+        item.setFlags(Qt.ItemFlag.NoItemFlags)
+        if background:
+            item.setBackground(background)
+        return item
+
+    def _make_target_spin(self, assistant) -> QSpinBox:
+        spin = QSpinBox()
+        spin.setRange(-1, 31)
+        spin.setSpecialValueText("Auto")
+        spin.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.PlusMinus)
+        # Breite Hoch/Runter-Buttons fuer leichtes Klicken
+        spin.setStyleSheet(
+            "QSpinBox::up-button, QSpinBox::down-button { width: 24px; }"
+        )
+        spin.setToolTip("Soll-Dienste diesen Monat (Auto = gleichmaessig verteilen)")
+        target = assistant.constraints.target_shifts
+        spin.setValue(-1 if target is None else target)
+        spin.valueChanged.connect(
+            lambda value, aid=assistant.id: self.on_target_changed(aid, value)
+        )
+        return spin
+
+    def on_target_changed(self, assistant_id: str, value: int):
+        assistant = self._assistant_by_id.get(assistant_id)
+        if not assistant:
+            return
+        assistant.constraints.target_shifts = None if value < 0 else value
+        self.update_summary()
+        self.plan_modified.emit()
+
     def rebuild_grid(self):
         if not self.plan:
             return
@@ -253,34 +331,99 @@ class PlanTab(QWidget):
         year, month = self.plan.year, self.plan.month
         days_in_month = calendar.monthrange(year, month)[1]
         assistants = self.plan.assistants
+        n = len(assistants)
+        self._assistant_by_id = {a.id: a for a in assistants}
+        self._target_spins = {}
+
+        split = self.settings.split_view
+        half = math.ceil(days_in_month / 2) if split else days_in_month
 
         self.table.clear()
-        self.table.setRowCount(len(assistants))
-        self.table.setColumnCount(days_in_month + 1)
+        self.table.setColumnCount(DAY_COL_OFFSET + half)
+        self.table.setRowCount(n * 2 + 1 if split else n)
 
-        header_labels = [""]
-        for day in range(1, days_in_month + 1):
-            weekday = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"][date(year, month, day).weekday()]
-            header_labels.append(f"{day}\n{weekday}")
+        # Spaltenkoepfe: feste Spalten + Tage der ersten Haelfte
+        header_labels = ["Soll", "Belegt\nV|VM|NM"]
+        for day in range(1, half + 1):
+            header_labels.append(self._day_header(day))
         self.table.setHorizontalHeaderLabels(header_labels)
-        self.table.setVerticalHeaderLabels([a.name for a in assistants])
 
+        # Zeilenkoepfe: Helfernamen (bei geteilter Ansicht zweimal)
+        row_labels = [a.name for a in assistants]
+        if split:
+            row_labels += [""] + [a.name for a in assistants]
+        self.table.setVerticalHeaderLabels(row_labels)
+
+        separator_bg = QColor(215, 215, 215)
+
+        # Erste Haelfte (bzw. ganzer Monat)
         for row, assistant in enumerate(assistants):
-            name_item = QTableWidgetItem(assistant.name)
-            name_item.setFlags(name_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-            self.table.setItem(row, 0, name_item)
-            for col in range(1, days_in_month + 1):
-                item = QTableWidgetItem()
-                item.setData(Qt.ItemDataRole.UserRole, (assistant.id, col))
-                self.table.setItem(row, col, item)
+            spin = self._make_target_spin(assistant)
+            self._target_spins[assistant.id] = spin
+            self.table.setCellWidget(row, 0, spin)
+            counts_item = self._make_inert_item()
+            counts_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.table.setItem(row, 1, counts_item)
+            for col in range(DAY_COL_OFFSET, DAY_COL_OFFSET + half):
+                day = col - DAY_COL_OFFSET + 1
+                self.table.setItem(row, col, self._make_day_item(assistant.id, day))
 
-        self.table.horizontalHeader().setSectionResizeMode(
-            QHeaderView.ResizeMode.Stretch
-        )
+        if split:
+            # Trennzeile mit den Tageskoepfen der zweiten Haelfte
+            sep_row = n
+            bold = QFont()
+            bold.setBold(True)
+            for col in range(self.table.columnCount()):
+                day = col - DAY_COL_OFFSET + 1 + half
+                item = self._make_inert_item(separator_bg)
+                if col >= DAY_COL_OFFSET and day <= days_in_month:
+                    item.setText(self._day_header(day).replace("\n", " "))
+                    item.setFont(bold)
+                    item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                self.table.setItem(sep_row, col, item)
+
+            # Zweite Haelfte
+            for i, assistant in enumerate(assistants):
+                row = n + 1 + i
+                self.table.setItem(row, 0, self._make_inert_item())
+                self.table.setItem(row, 1, self._make_inert_item())
+                for col in range(DAY_COL_OFFSET, DAY_COL_OFFSET + half):
+                    day = col - DAY_COL_OFFSET + 1 + half
+                    if day <= days_in_month:
+                        self.table.setItem(row, col, self._make_day_item(assistant.id, day))
+                    else:
+                        self.table.setItem(row, col, self._make_inert_item(separator_bg))
+
+        header = self.table.horizontalHeader()
+        header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         self.refresh_display()
 
+    def _shift_counts(self, assistant_id: str) -> tuple[int, int, int]:
+        full = vm = nm = 0
+        for entries in self.plan.schedule.values():
+            for e in entries:
+                if e.assistant_id != assistant_id:
+                    continue
+                if e.shift_type == ShiftType.FULL:
+                    full += 1
+                elif e.shift_type == ShiftType.HALF_MORNING:
+                    vm += 1
+                else:
+                    nm += 1
+        return full, vm, nm
+
     def refresh_display(self):
-        # Der Delegate zeichnet direkt aus den Plandaten
+        if not self.plan:
+            return
+        # Belegt-Spalte (nur obere Zeilengruppe)
+        for row, assistant in enumerate(self.plan.assistants):
+            item = self.table.item(row, 1)
+            if item:
+                full, vm, nm = self._shift_counts(assistant.id)
+                item.setText(f"{full} | {vm} | {nm}")
+        # Der Delegate zeichnet die Tageszellen direkt aus den Plandaten
         self.table.viewport().update()
         self.update_summary()
 
@@ -290,16 +433,12 @@ class PlanTab(QWidget):
 
         summary_parts = []
         for assistant in self.plan.assistants:
-            count = sum(
-                shift_weight(e.shift_type)
-                for entries in self.plan.schedule.values()
-                for e in entries
-                if e.assistant_id == assistant.id
-            )
+            full, vm, nm = self._shift_counts(assistant.id)
             target = assistant.constraints.target_shifts
-            target_text = f"/{target}" if target is not None else ""
-            summary_parts.append(f"{assistant.name}: {count:g}{target_text}")
-        self.summary_label.setText(" | ".join(summary_parts))
+            target_text = f" Soll {target}" if target is not None else ""
+            summary_parts.append(f"{assistant.name} ({full}|{vm}|{nm}){target_text}")
+        legend = "Legende: Name (VOLL|VM|NM)"
+        self.summary_label.setText("   ".join(summary_parts) + "      " + legend)
 
         warnings = validate(self.plan)
         self.warnings_label.setText("\n".join(w.message for w in warnings))
@@ -339,16 +478,18 @@ class PlanTab(QWidget):
 
     # --- Rechtsklick / Mehrfachauswahl ---
 
-    def _selected_cells(self, fallback_pos=None) -> list[tuple[int, int]]:
-        cells = [
-            (item.row(), item.column())
-            for item in self.table.selectedItems()
-            if item.column() > 0
-        ]
+    def _selected_cells(self, fallback_pos=None) -> list[tuple[str, int]]:
+        cells = []
+        for item in self.table.selectedItems():
+            ref = item.data(Qt.ItemDataRole.UserRole)
+            if ref:
+                cells.append(ref)
         if not cells and fallback_pos is not None:
             item = self.table.itemAt(fallback_pos)
-            if item and item.column() > 0:
-                cells = [(item.row(), item.column())]
+            if item:
+                ref = item.data(Qt.ItemDataRole.UserRole)
+                if ref:
+                    cells.append(ref)
         return cells
 
     def show_context_menu(self, pos):
@@ -376,28 +517,28 @@ class PlanTab(QWidget):
 
         menu.exec(self.table.mapToGlobal(pos))
 
-    def delete_cells(self, cells: list[tuple[int, int]]):
+    def delete_cells(self, cells: list[tuple[str, int]]):
         if not self.plan:
             return
         existing = [
-            (row, col) for row, col in cells
-            if self._entry_at(self.plan.assistants[row].id, col)
+            (assistant_id, day) for assistant_id, day in cells
+            if self._entry_at(assistant_id, day)
         ]
         if not existing:
             return
         if not self._confirm(f"{len(existing)} Eintrag/Eintraege loeschen?"):
             return
-        for row, col in existing:
-            self._remove_entry(self.plan.assistants[row].id, col)
+        for assistant_id, day in existing:
+            self._remove_entry(assistant_id, day)
         self.refresh_display()
         self.plan_modified.emit()
 
-    def set_locked(self, cells: list[tuple[int, int]], locked: bool):
+    def set_locked(self, cells: list[tuple[str, int]], locked: bool):
         if not self.plan:
             return
         changed = False
-        for row, col in cells:
-            entry = self._entry_at(self.plan.assistants[row].id, col)
+        for assistant_id, day in cells:
+            entry = self._entry_at(assistant_id, day)
             if entry and entry.locked != locked:
                 entry.locked = locked
                 changed = True

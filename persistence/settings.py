@@ -19,6 +19,8 @@ class AppSettings:
     confirm_overwrite: bool = True
     seed: int = 42
     deterministic: bool = True
+    # Geteilte Kalenderansicht: zweite Monatshaelfte unter der ersten
+    split_view: bool = False
 
 
 def load_settings() -> AppSettings:
@@ -38,6 +40,7 @@ def load_settings() -> AppSettings:
         confirm_overwrite=data.get("confirm_overwrite", True),
         seed=data.get("seed", 42),
         deterministic=data.get("deterministic", True),
+        split_view=data.get("split_view", False),
     )
 
 

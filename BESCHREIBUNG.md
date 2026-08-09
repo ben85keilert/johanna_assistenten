@@ -45,6 +45,12 @@ Weitere Bedingungen (z. B. Wochenend-Fairness) folgen später und werden hier er
 Zwei Tabs:
 
 1. **Dienstplan-Tab**: Monatsraster (Zeile = Helfer, Spalte = Tag).
+   - **Zwei Ansichten** (umschaltbar, wird gemerkt): *Breit* (der ganze Monat in
+     einer Zeile) oder *Zweigeteilt* (zweite Monatshälfte unter der ersten — man
+     scrollt vertikal statt horizontal).
+   - Neben dem Namen stehen pro Helfer die **Soll-Dienste** (mit breiten
+     Hoch/Runter-Buttons einstellbar, „Auto" = gleichmäßig verteilen) und die
+     **belegten Dienste** als Tupel `VOLL | VM | NM`.
    - **Stempel-Buttons**: Tagesdienst | VM | NM | Urlaub | Fixieren. Ein aktiver
      Stempel wird per Klick auf eine Zelle angewendet; erneuter Klick entfernt den
      Eintrag wieder. Beim Überschreiben vorhandener Einträge wird nachgefragt
@@ -52,19 +58,27 @@ Zwei Tabs:
    - **Mehrfachauswahl**: mit Strg/Shift lassen sich mehrere Zellen (auch verstreut)
      markieren; das Rechtsklick-Menü wirkt dann auf alle markierten Zellen.
    - **Urlaub** im Raster trägt den Tag als „nicht verfügbar" beim Helfer ein
-     (dieselben Daten wie im Einschränkungen-Dialog). Längere Urlaube trägt man als
-     Zeitraum im Einschränkungen-Dialog ein.
+     (dieselben Daten wie im Einschränkungen-Dialog).
+   - Unter dem Raster: Zusammenfassung pro Helfer als Tupel `Name (VOLL|VM|NM)`
+     mit Legende sowie Warnhinweise (unbesetzte/halbe Tage, Zielabweichungen).
 2. **Team-Tab**: Helfer anlegen/entfernen, Name und Farbe setzen, Einschränkungen
-   bearbeiten (Doppelklick oder Button).
+   bearbeiten (Doppelklick oder Button). Darunter die **Urlaubsübersicht**: alle
+   Urlaube aller Helfer chronologisch sortiert; „Hinzufügen" öffnet einen Dialog
+   mit Helferauswahl und Kalender-Datumsfeldern, längere Zeiträume trägt man hier
+   ein.
 
 ### Generier-Zyklus: Fixieren und Neuwürfeln
 
 1. Man setzt zuerst die **Fixpunkte** von Hand (z. B. „Martha kommt am 1.–2. VOLL,
    am 3. nur VM"). Manuell Gesetztes bleibt immer stehen.
 2. **Generieren** füllt die restlichen Tage zufällig, unter Beachtung aller Regeln.
-   Zufällig vergebene Dienste sind **farblich markiert** (heller + Punkt).
-3. Was gefällt, **fixiert** man per Klick (Fixieren-Stempel oder Rechtsklick);
-   fixierte Einträge tragen ein Schloss.
+   Zufällig vergebene Dienste tragen einen **Punkt**.
+3. Was gefällt, **fixiert** man per Klick (Fixieren-Stempel oder Rechtsklick).
+   **Farblogik: fixierte Einträge sind kräftig gefärbt und tragen ein Schloss,
+   nicht fixierte sind blasser.**
+   „Deterministisch" bedeutet: Mit gleichem Seed und gleichen Fixpunkten liefert
+   „Generieren" immer denselben Plan (reproduzierbar); ohne Häkchen würfelt jeder
+   Klick anders.
 4. Was nicht gefällt, bleibt unfixiert und wird beim nächsten Klick auf
    „Generieren" **neu gewürfelt**. Schritte 3–4 wiederholt man, bis der Plan passt.
 
@@ -122,11 +136,12 @@ Helfer (Urlaube, Ziel-Dienste usw.):
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "last_year": 2026, "last_month": 8,
   "window_geometry": "…",
   "confirm_overwrite": true,
-  "seed": 42, "deterministic": true
+  "seed": 42, "deterministic": true,
+  "split_view": false
 }
 ```
 

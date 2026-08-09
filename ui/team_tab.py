@@ -1,8 +1,10 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QTableWidget,
-    QTableWidgetItem, QMessageBox, QColorDialog, QHeaderView
+    QTableWidgetItem, QMessageBox, QColorDialog, QHeaderView,
+    QGroupBox, QListWidget, QListWidgetItem, QDialog, QComboBox,
+    QDateEdit, QLabel
 )
-from PySide6.QtCore import Qt, QSize, Signal
+from PySide6.QtCore import Qt, QSize, Signal, QDate
 from PySide6.QtGui import QColor, QPixmap
 
 from models import Assistant, AssistantConstraints, MonthPlan
@@ -51,11 +53,135 @@ class TeamTab(QWidget):
         self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         layout.addWidget(self.table)
 
+        # Urlaubsuebersicht: alle Urlaube chronologisch sortiert
+        vacation_group = QGroupBox("Urlaube (chronologisch)")
+        vacation_layout = QVBoxLayout()
+        self.vacation_list = QListWidget()
+        vacation_layout.addWidget(self.vacation_list)
+
+        vacation_buttons = QHBoxLayout()
+        self.vacation_add_btn = QPushButton("+ Urlaub hinzufuegen")
+        self.vacation_add_btn.clicked.connect(self.add_vacation)
+        vacation_buttons.addWidget(self.vacation_add_btn)
+        self.vacation_remove_btn = QPushButton("- Entfernen")
+        self.vacation_remove_btn.clicked.connect(self.remove_vacation)
+        vacation_buttons.addWidget(self.vacation_remove_btn)
+        vacation_buttons.addStretch()
+        vacation_layout.addLayout(vacation_buttons)
+
+        vacation_group.setLayout(vacation_layout)
+        layout.addWidget(vacation_group)
+
         self.setLayout(layout)
 
     def set_plan(self, plan: MonthPlan):
         self.plan = plan
         self.refresh_table()
+        self.refresh_vacations()
+
+    def refresh_vacations(self):
+        """Alle Urlaubszeitraeume aller Helfer, chronologisch nach Beginn."""
+        self.vacation_list.clear()
+        if not self.plan:
+            return
+
+        vacations = []
+        for assistant in self.plan.assistants:
+            for start, end in assistant.constraints.vacation_ranges:
+                vacations.append((start, end, assistant))
+        vacations.sort(key=lambda v: (v[0], v[1]))
+
+        for start, end, assistant in vacations:
+            text = "{:%d.%m.%Y} - {:%d.%m.%Y}   {}".format(start, end, assistant.name)
+            item = QListWidgetItem(text)
+            item.setData(
+                Qt.ItemDataRole.UserRole,
+                (assistant.id, start.isoformat(), end.isoformat()),
+            )
+            # Farbpunkt des Helfers als Markierung
+            pixmap = QPixmap(12, 12)
+            pixmap.fill(QColor(assistant.color))
+            item.setIcon(pixmap)
+            self.vacation_list.addItem(item)
+
+    def add_vacation(self):
+        if not self.plan or not self.plan.assistants:
+            QMessageBox.warning(self, "Warnung", "Bitte zuerst Helfer anlegen.")
+            return
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Urlaub hinzufuegen")
+        layout = QVBoxLayout()
+
+        h0 = QHBoxLayout()
+        h0.addWidget(QLabel("Helfer:"))
+        assistant_combo = QComboBox()
+        for assistant in self.plan.assistants:
+            pixmap = QPixmap(12, 12)
+            pixmap.fill(QColor(assistant.color))
+            assistant_combo.addItem(pixmap, assistant.name, assistant.id)
+        h0.addWidget(assistant_combo)
+        h0.addStretch()
+        layout.addLayout(h0)
+
+        default_date = QDate(self.plan.year, self.plan.month, 1)
+        h1 = QHBoxLayout()
+        h1.addWidget(QLabel("Von:"))
+        start_edit = QDateEdit(default_date)
+        start_edit.setCalendarPopup(True)
+        h1.addWidget(start_edit)
+        h1.addWidget(QLabel("Bis:"))
+        end_edit = QDateEdit(default_date)
+        end_edit.setCalendarPopup(True)
+        h1.addWidget(end_edit)
+        h1.addStretch()
+        layout.addLayout(h1)
+
+        # Bis-Datum mitziehen, wenn Von hinter Bis liegt
+        start_edit.dateChanged.connect(
+            lambda d: end_edit.setDate(d) if end_edit.date() < d else None
+        )
+
+        button_layout = QHBoxLayout()
+        ok_btn = QPushButton("OK")
+        ok_btn.clicked.connect(dialog.accept)
+        cancel_btn = QPushButton("Abbrechen")
+        cancel_btn.clicked.connect(dialog.reject)
+        button_layout.addStretch()
+        button_layout.addWidget(ok_btn)
+        button_layout.addWidget(cancel_btn)
+        layout.addLayout(button_layout)
+
+        dialog.setLayout(layout)
+        if not dialog.exec():
+            return
+
+        start = start_edit.date().toPython()
+        end = end_edit.date().toPython()
+        if start > end:
+            QMessageBox.warning(self, "Fehler", "Startdatum muss vor dem Enddatum liegen.")
+            return
+
+        assistant_id = assistant_combo.currentData()
+        assistant = next(a for a in self.plan.assistants if a.id == assistant_id)
+        assistant.constraints.vacation_ranges.append((start, end))
+        self.refresh_vacations()
+        self.assistants_changed.emit()
+
+    def remove_vacation(self):
+        item = self.vacation_list.currentItem()
+        if not item:
+            QMessageBox.warning(self, "Warnung", "Bitte waehlen Sie einen Urlaub aus.")
+            return
+
+        assistant_id, start_iso, end_iso = item.data(Qt.ItemDataRole.UserRole)
+        target = (date.fromisoformat(start_iso), date.fromisoformat(end_iso))
+        for assistant in self.plan.assistants:
+            if assistant.id == assistant_id and target in assistant.constraints.vacation_ranges:
+                assistant.constraints.vacation_ranges.remove(target)
+                break
+        self.refresh_vacations()
+        self.assistants_changed.emit()
 
     def refresh_table(self):
         if not self.plan:
@@ -155,6 +281,8 @@ class TeamTab(QWidget):
         )
         if dialog.exec():
             self.refresh_table()
+            self.refresh_vacations()
+            self.assistants_changed.emit()
 
     def _save_names_from_table(self):
         if not self.plan:
