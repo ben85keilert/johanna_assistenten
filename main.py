@@ -1,14 +1,15 @@
 import sys
-from PySide6.QtWidgets import (
-    QApplication, QMainWindow, QMessageBox, QFileDialog,
-    QVBoxLayout, QWidget
-)
-from PySide6.QtCore import Qt
+from datetime import datetime
+
+from PySide6.QtWidgets import QApplication, QMessageBox, QFileDialog
+from PySide6.QtCore import QByteArray
 from PySide6.QtGui import QAction
 
-from models import MonthPlan, Assistant, AssistantConstraints
-from persistence import save, load, save_team, load_team, save_plan, load_plan
-from datetime import datetime
+from models import MonthPlan
+from persistence import (
+    save, load, save_team, load_team, save_plan, load_plan,
+    load_settings, save_settings,
+)
 from ui.main_window import MainWindow
 from ui.team_tab import TeamTab
 from ui.plan_tab import PlanTab
@@ -17,130 +18,165 @@ from ui.plan_tab import PlanTab
 class JohannaApp:
     def __init__(self):
         self.app = QApplication(sys.argv)
+        self.settings = load_settings()
         self.window = MainWindow()
         self.plan = self._auto_load()
 
         self.team_tab = TeamTab()
-        self.plan_tab = PlanTab()
+        self.plan_tab = PlanTab(self.settings)
 
-        self.window.set_team_tab(self.team_tab)
         self.window.set_plan_tab(self.plan_tab)
+        self.window.set_team_tab(self.team_tab)
 
         self.setup_menu()
+
+        # Signale verdrahten
+        self.team_tab.assistants_changed.connect(self.plan_tab.rebuild_grid)
+        self.team_tab.assistants_changed.connect(self.window.mark_modified)
+        self.plan_tab.plan_modified.connect(self.window.mark_modified)
+        self.plan_tab.month_change_requested.connect(self.change_month)
+        self.window.on_close_save = self.autosave_on_close
+
         self.load_plan_to_ui()
+        self._restore_geometry()
 
     def _auto_load(self) -> MonthPlan:
-        assistants = load_team()
+        # Letzten Zustand wiederherstellen: zuletzt geoeffneter Monat,
+        # sonst der aktuelle Kalendermonat
         now = datetime.now()
-        plan = load_plan(now.year, now.month, assistants)
+        year = self.settings.last_year or now.year
+        month = self.settings.last_month or now.month
+
+        assistants = load_team()
+        plan = load_plan(year, month, assistants)
         if plan is None:
-            plan = MonthPlan(year=now.year, month=now.month, assistants=assistants)
+            plan = MonthPlan(year=year, month=month, assistants=assistants)
         return plan
+
+    def _restore_geometry(self):
+        if self.settings.window_geometry:
+            geometry = QByteArray.fromHex(self.settings.window_geometry.encode())
+            if not geometry.isEmpty():
+                self.window.restoreGeometry(geometry)
 
     def setup_menu(self):
         menubar = self.window.menuBar()
         file_menu = menubar.addMenu("Datei")
 
-        # Neu
-        new_action = QAction("Neu", self.window)
-        new_action.triggered.connect(self.new_plan)
+        new_action = QAction("Monat leeren", self.window)
+        new_action.triggered.connect(self.clear_month)
         file_menu.addAction(new_action)
 
-        # Oeffnen
-        open_action = QAction("Oeffnen", self.window)
+        open_action = QAction("Plan-Datei oeffnen...", self.window)
         open_action.triggered.connect(self.open_plan)
         file_menu.addAction(open_action)
 
-        # Speichern
         save_action = QAction("Speichern", self.window)
-        save_action.triggered.connect(self.save_plan)
+        save_action.setShortcut("Ctrl+S")
+        save_action.triggered.connect(self.save_all)
         file_menu.addAction(save_action)
 
-        # Exportieren
         export_menu = file_menu.addMenu("Exportieren")
-
-        csv_action = QAction("CSV", self.window)
-        csv_action.triggered.connect(self.export_csv)
-        export_menu.addAction(csv_action)
-
-        excel_action = QAction("Excel", self.window)
-        excel_action.triggered.connect(self.export_excel)
-        export_menu.addAction(excel_action)
-
-        pdf_action = QAction("PDF", self.window)
-        pdf_action.triggered.connect(self.export_pdf)
-        export_menu.addAction(pdf_action)
+        for label, handler in [
+            ("CSV", self.export_csv),
+            ("Excel", self.export_excel),
+            ("PDF", self.export_pdf),
+        ]:
+            action = QAction(label, self.window)
+            action.triggered.connect(handler)
+            export_menu.addAction(action)
 
         file_menu.addSeparator()
 
-        # Beenden
         exit_action = QAction("Beenden", self.window)
         exit_action.triggered.connect(self.window.close)
         file_menu.addAction(exit_action)
 
-        # Team-Tab Aenderungen verfolgen
-        self.team_tab.plan = self.plan
-        self.plan_tab.set_plan(self.plan)
-
-        # Verbinde Aenderungen
-        self.team_tab.plan = self.plan
-        self.plan_tab.plan = self.plan
-
     def load_plan_to_ui(self):
         self.team_tab.set_plan(self.plan)
         self.plan_tab.set_plan(self.plan)
-        self.team_tab.assistants_changed.connect(self.plan_tab.rebuild_grid)
+        self.window.set_title_plan(self.plan.year, self.plan.month)
         self.window.mark_saved()
 
-    def new_plan(self):
-        if self.window.is_modified:
-            reply = QMessageBox.question(
-                self.window,
-                "Nicht gespeichert",
-                "Moechten Sie die Aenderungen speichern?",
-                QMessageBox.StandardButton.Save
-                | QMessageBox.StandardButton.Discard
-                | QMessageBox.StandardButton.Cancel,
-            )
-            if reply == QMessageBox.StandardButton.Save:
-                self.save_plan()
-            elif reply == QMessageBox.StandardButton.Cancel:
-                return
+    def change_month(self, year: int, month: int):
+        """Monatswechsel: aktuellen Monat speichern, Zielmonat laden."""
+        if (year, month) == (self.plan.year, self.plan.month):
+            return
+
+        self._save_current(update_status=False)
 
         assistants = load_team()
-        now = datetime.now()
-        self.plan = MonthPlan(year=now.year, month=now.month, assistants=assistants)
-        self.window.current_file_path = None
+        plan = load_plan(year, month, assistants)
+        if plan is None:
+            plan = MonthPlan(year=year, month=month, assistants=assistants)
+        self.plan = plan
+
+        self.settings.last_year = year
+        self.settings.last_month = month
         self.load_plan_to_ui()
+
+    def clear_month(self):
+        reply = QMessageBox.question(
+            self.window,
+            "Monat leeren",
+            f"Alle Eintraege fuer {self.plan.year}-{self.plan.month:02d} loeschen?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            self.plan.schedule.clear()
+            self.plan_tab.rebuild_grid()
+            self.window.mark_modified()
 
     def open_plan(self):
         path, _ = QFileDialog.getOpenFileName(
-            self.window,
-            "Plan oeffnen",
-            filter="JSON-Dateien (*.json)"
+            self.window, "Plan oeffnen", filter="JSON-Dateien (*.json)"
         )
         if path:
             try:
                 self.plan = load(path)
-                self.window.current_file_path = path
+                self.settings.last_year = self.plan.year
+                self.settings.last_month = self.plan.month
                 self.load_plan_to_ui()
                 self.window.status_bar.showMessage(f"Geladen: {path}")
             except Exception as e:
                 QMessageBox.critical(self.window, "Fehler", f"Laden fehlgeschlagen:\n{e}")
 
-    def save_plan(self):
+    def _save_current(self, update_status: bool = True):
+        self.team_tab._save_names_from_table()
+        self.plan.modified_at = datetime.now().isoformat()
+        if not self.plan.created_at:
+            self.plan.created_at = datetime.now().isoformat()
+        save_team(self.plan.assistants)
+        save_plan(self.plan)
+        self.window.mark_saved()
+        if update_status:
+            self.window.status_bar.showMessage(
+                f"Gespeichert: Plan {self.plan.year}-{self.plan.month:02d}"
+            )
+
+    def save_all(self):
         try:
-            self.team_tab._save_names_from_table()
-            self.plan.modified_at = datetime.now().isoformat()
-            if not self.plan.created_at:
-                self.plan.created_at = datetime.now().isoformat()
-            save_team(self.plan.assistants)
-            save_plan(self.plan)
-            self.window.mark_saved()
-            year_month = f"{self.plan.year}-{self.plan.month:02d}"
-            self.window.status_bar.showMessage(f"Gespeichert: Plan {year_month}")
+            self._save_current()
+            self._save_settings()
         except Exception as e:
             QMessageBox.critical(self.window, "Fehler", f"Speichern fehlgeschlagen:\n{e}")
+
+    def _save_settings(self):
+        self.settings.last_year = self.plan.year
+        self.settings.last_month = self.plan.month
+        self.settings.window_geometry = bytes(
+            self.window.saveGeometry().toHex()
+        ).decode()
+        save_settings(self.settings)
+
+    def autosave_on_close(self):
+        # Beim Beenden wird automatisch gespeichert (Session-Restore beim
+        # naechsten Start); Fehler duerfen das Schliessen nicht verhindern
+        try:
+            self._save_current(update_status=False)
+            self._save_settings()
+        except Exception as e:
+            print(f"Automatisches Speichern fehlgeschlagen: {e}", file=sys.stderr)
 
     def export_csv(self):
         folder = QFileDialog.getExistingDirectory(self.window, "Zielordner waehlen")
@@ -149,9 +185,7 @@ class JohannaApp:
                 from export.csv_exporter import export_csv
                 f1, f2 = export_csv(self.plan, folder)
                 QMessageBox.information(
-                    self.window,
-                    "Erfolg",
-                    f"CSV exportiert:\n{f1}\n{f2}"
+                    self.window, "Erfolg", f"CSV exportiert:\n{f1}\n{f2}"
                 )
             except Exception as e:
                 QMessageBox.critical(self.window, "Fehler", f"Export fehlgeschlagen:\n{e}")
@@ -162,11 +196,7 @@ class JohannaApp:
             try:
                 from export.excel_exporter import export_excel
                 f = export_excel(self.plan, folder)
-                QMessageBox.information(
-                    self.window,
-                    "Erfolg",
-                    f"Excel exportiert:\n{f}"
-                )
+                QMessageBox.information(self.window, "Erfolg", f"Excel exportiert:\n{f}")
             except Exception as e:
                 QMessageBox.critical(self.window, "Fehler", f"Export fehlgeschlagen:\n{e}")
 
@@ -176,11 +206,7 @@ class JohannaApp:
             try:
                 from export.pdf_exporter import export_pdf
                 f = export_pdf(self.plan, folder)
-                QMessageBox.information(
-                    self.window,
-                    "Erfolg",
-                    f"PDF exportiert:\n{f}"
-                )
+                QMessageBox.information(self.window, "Erfolg", f"PDF exportiert:\n{f}")
             except Exception as e:
                 QMessageBox.critical(self.window, "Fehler", f"Export fehlgeschlagen:\n{e}")
 

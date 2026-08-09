@@ -1,15 +1,4 @@
-from PySide6.QtWidgets import (
-    QMainWindow,
-    QSplitter,
-    QVBoxLayout,
-    QWidget,
-    QStatusBar,
-)
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QIcon
-
-from models import MonthPlan
-from persistence import save, load
+from PySide6.QtWidgets import QMainWindow, QTabWidget, QStatusBar
 
 
 class MainWindow(QMainWindow):
@@ -18,43 +7,40 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Johanna Assistenten - Dienstplan")
         self.setGeometry(100, 100, 1200, 800)
 
-        self.current_plan: MonthPlan | None = None
-        self.current_file_path: str | None = None
         self.is_modified = False
+        self._title_plan = ""
 
-        # Splitter (vertikal)
-        self.splitter = QSplitter(Qt.Orientation.Vertical)
-        self.setCentralWidget(self.splitter)
+        self.tab_widget = QTabWidget()
+        self.setCentralWidget(self.tab_widget)
 
-        # Placeholder für Tabs (werden später verdrahtet)
         self.team_tab = None
         self.plan_tab = None
 
-        # Statusbar
         self.status_bar = QStatusBar()
         self.setStatusBar(self.status_bar)
         self.status_bar.showMessage("Bereit")
 
-        # Menü wird in main.py verdrahtet
+        # Menue wird in main.py verdrahtet
 
-    def set_team_tab(self, tab):
-        self.team_tab = tab
-        self.splitter.addWidget(tab)
+        # Beim Schliessen speichert JohannaApp automatisch (siehe main.py)
+        self.on_close_save = None
 
     def set_plan_tab(self, tab):
         self.plan_tab = tab
-        self.splitter.insertWidget(0, tab)
-        self.splitter.setStretchFactor(0, 2)
-        self.splitter.setStretchFactor(1, 1)
+        self.tab_widget.insertTab(0, tab, "Dienstplan")
+        self.tab_widget.setCurrentIndex(0)
+
+    def set_team_tab(self, tab):
+        self.team_tab = tab
+        self.tab_widget.addTab(tab, "Team")
+
+    def set_title_plan(self, year: int, month: int):
+        self._title_plan = f"Plan {year}-{month:02d}"
+        self.update_window_title()
 
     def update_window_title(self):
-        if self.current_file_path:
-            path_display = self.current_file_path.split("/")[-1]
-        else:
-            path_display = "Unbenannt"
-
         modified = "*" if self.is_modified else ""
-        self.setWindowTitle(f"Johanna Assistenten - {path_display}{modified}")
+        self.setWindowTitle(f"Johanna Assistenten - {self._title_plan}{modified}")
 
     def mark_modified(self):
         self.is_modified = True
@@ -65,23 +51,6 @@ class MainWindow(QMainWindow):
         self.update_window_title()
 
     def closeEvent(self, event):
-        if self.is_modified:
-            from PySide6.QtWidgets import QMessageBox
-
-            reply = QMessageBox.question(
-                self,
-                "Nicht gespeicherte Aenderungen",
-                "Moechten Sie die Aenderungen speichern?",
-                QMessageBox.StandardButton.Save
-                | QMessageBox.StandardButton.Discard
-                | QMessageBox.StandardButton.Cancel,
-            )
-            if reply == QMessageBox.StandardButton.Save:
-                # Speichern-Logik wird verdrahtet
-                event.accept()
-            elif reply == QMessageBox.StandardButton.Discard:
-                event.accept()
-            else:
-                event.ignore()
-        else:
-            event.accept()
+        if self.on_close_save is not None:
+            self.on_close_save()
+        event.accept()

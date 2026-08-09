@@ -9,6 +9,9 @@ class AssistantConstraints:
     unavailable_dates: list[date] = field(default_factory=list)
     vacation_ranges: list[tuple[date, date]] = field(default_factory=list)
     max_consecutive_days: int = 3
+    # Helfer mit weiter Anreise kommen immer fuer mehrere Tage am Stueck;
+    # der Generator plant sie nur in Bloecken von mindestens dieser Laenge ein
+    min_block_days: int = 1
     target_shifts: int | None = None
 
 

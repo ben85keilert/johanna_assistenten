@@ -61,13 +61,23 @@ class ConstraintsDialog(QDialog):
         h1 = QHBoxLayout()
         h1.addWidget(QLabel("Max. aufeinanderfolgende Tage:"))
         self.max_consecutive_spin = QSpinBox()
-        self.max_consecutive_spin.setRange(1, 3)
+        self.max_consecutive_spin.setRange(1, 7)
         self.max_consecutive_spin.setValue(
             self.assistant.constraints.max_consecutive_days
         )
         h1.addWidget(self.max_consecutive_spin)
         h1.addStretch()
         layout3.addLayout(h1)
+
+        # Min. Tage am Stueck (weite Anreise -> nur Blockdienste)
+        h1b = QHBoxLayout()
+        h1b.addWidget(QLabel("Min. Tage am Stueck (weite Anreise):"))
+        self.min_block_spin = QSpinBox()
+        self.min_block_spin.setRange(1, 7)
+        self.min_block_spin.setValue(self.assistant.constraints.min_block_days)
+        h1b.addWidget(self.min_block_spin)
+        h1b.addStretch()
+        layout3.addLayout(h1b)
 
         # Ziel-Dienste
         h2 = QHBoxLayout()
@@ -202,9 +212,18 @@ class ConstraintsDialog(QDialog):
         self.target_spin.setEnabled(not is_auto)
 
     def save_and_close(self):
+        if self.min_block_spin.value() > self.max_consecutive_spin.value():
+            QMessageBox.warning(
+                self,
+                "Ungueltige Eingabe",
+                "\"Min. Tage am Stueck\" darf nicht groesser sein als "
+                "\"Max. aufeinanderfolgende Tage\".",
+            )
+            return
         self.assistant.constraints.max_consecutive_days = (
             self.max_consecutive_spin.value()
         )
+        self.assistant.constraints.min_block_days = self.min_block_spin.value()
         if self.target_auto_check.isChecked():
             self.assistant.constraints.target_shifts = None
         else:

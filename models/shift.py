@@ -14,3 +14,6 @@ class ShiftEntry:
     assistant_id: str
     shift_type: ShiftType
     locked: bool = False
+    # True = vom Zufallsgenerator vergeben (wird beim Neuwuerfeln ersetzt,
+    # solange nicht locked); False = von Hand gesetzt (bleibt immer stehen)
+    generated: bool = False

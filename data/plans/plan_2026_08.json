@@ -1,0 +1,310 @@
+{
+  "version": 2,
+  "year": 2026,
+  "month": 8,
+  "schedule": {
+    "5": [
+      {
+        "assistant_id": "f1f04d0e",
+        "shift_type": "FULL",
+        "locked": false,
+        "generated": false
+      }
+    ],
+    "6": [
+      {
+        "assistant_id": "4a0921a3",
+        "shift_type": "FULL",
+        "locked": false,
+        "generated": false
+      }
+    ],
+    "7": [
+      {
+        "assistant_id": "312442c2",
+        "shift_type": "FULL",
+        "locked": false,
+        "generated": false
+      }
+    ],
+    "8": [
+      {
+        "assistant_id": "4a0921a3",
+        "shift_type": "FULL",
+        "locked": false,
+        "generated": false
+      }
+    ],
+    "9": [
+      {
+        "assistant_id": "f1f04d0e",
+        "shift_type": "HALF_MORNING",
+        "locked": false,
+        "generated": false
+      },
+      {
+        "assistant_id": "4a0921a3",
+        "shift_type": "HALF_AFTERNOON",
+        "locked": false,
+        "generated": false
+      }
+    ],
+    "22": [
+      {
+        "assistant_id": "4874d6d5",
+        "shift_type": "FULL",
+        "locked": false,
+        "generated": true
+      }
+    ],
+    "18": [
+      {
+        "assistant_id": "312442c2",
+        "shift_type": "FULL",
+        "locked": false,
+        "generated": true
+      }
+    ],
+    "15": [
+      {
+        "assistant_id": "4874d6d5",
+        "shift_type": "FULL",
+        "locked": false,
+        "generated": true
+      }
+    ],
+    "31": [
+      {
+        "assistant_id": "f1f04d0e",
+        "shift_type": "FULL",
+        "locked": false,
+        "generated": true
+      }
+    ],
+    "25": [
+      {
+        "assistant_id": "312442c2",
+        "shift_type": "FULL",
+        "locked": false,
+        "generated": true
+      }
+    ],
+    "12": [
+      {
+        "assistant_id": "4874d6d5",
+        "shift_type": "FULL",
+        "locked": false,
+        "generated": true
+      }
+    ],
+    "11": [
+      {
+        "assistant_id": "4a0921a3",
+        "shift_type": "FULL",
+        "locked": false,
+        "generated": true
+      }
+    ],
+    "16": [
+      {
+        "assistant_id": "f1f04d0e",
+        "shift_type": "FULL",
+        "locked": false,
+        "generated": true
+      }
+    ],
+    "21": [
+      {
+        "assistant_id": "4874d6d5",
+        "shift_type": "FULL",
+        "locked": false,
+        "generated": true
+      }
+    ],
+    "28": [
+      {
+        "assistant_id": "312442c2",
+        "shift_type": "FULL",
+        "locked": false,
+        "generated": true
+      }
+    ],
+    "17": [
+      {
+        "assistant_id": "f1f04d0e",
+        "shift_type": "FULL",
+        "locked": false,
+        "generated": true
+      }
+    ],
+    "24": [
+      {
+        "assistant_id": "4a0921a3",
+        "shift_type": "FULL",
+        "locked": false,
+        "generated": true
+      }
+    ],
+    "2": [
+      {
+        "assistant_id": "4874d6d5",
+        "shift_type": "FULL",
+        "locked": false,
+        "generated": true
+      }
+    ],
+    "20": [
+      {
+        "assistant_id": "312442c2",
+        "shift_type": "FULL",
+        "locked": false,
+        "generated": true
+      }
+    ],
+    "29": [
+      {
+        "assistant_id": "4a0921a3",
+        "shift_type": "FULL",
+        "locked": false,
+        "generated": true
+      }
+    ],
+    "19": [
+      {
+        "assistant_id": "f1f04d0e",
+        "shift_type": "FULL",
+        "locked": false,
+        "generated": true
+      }
+    ],
+    "3": [
+      {
+        "assistant_id": "4874d6d5",
+        "shift_type": "FULL",
+        "locked": false,
+        "generated": true
+      }
+    ],
+    "23": [
+      {
+        "assistant_id": "312442c2",
+        "shift_type": "FULL",
+        "locked": false,
+        "generated": true
+      }
+    ],
+    "30": [
+      {
+        "assistant_id": "4a0921a3",
+        "shift_type": "FULL",
+        "locked": false,
+        "generated": true
+      }
+    ],
+    "10": [
+      {
+        "assistant_id": "312442c2",
+        "shift_type": "FULL",
+        "locked": false,
+        "generated": true
+      }
+    ],
+    "27": [
+      {
+        "assistant_id": "f1f04d0e",
+        "shift_type": "FULL",
+        "locked": false,
+        "generated": true
+      }
+    ],
+    "13": [
+      {
+        "assistant_id": "4874d6d5",
+        "shift_type": "FULL",
+        "locked": false,
+        "generated": true
+      }
+    ],
+    "14": [
+      {
+        "assistant_id": "f1f04d0e",
+        "shift_type": "FULL",
+        "locked": false,
+        "generated": true
+      }
+    ],
+    "1": [
+      {
+        "assistant_id": "4a0921a3",
+        "shift_type": "FULL",
+        "locked": false,
+        "generated": true
+      }
+    ],
+    "4": [
+      {
+        "assistant_id": "312442c2",
+        "shift_type": "FULL",
+        "locked": false,
+        "generated": true
+      }
+    ],
+    "26": [
+      {
+        "assistant_id": "4874d6d5",
+        "shift_type": "FULL",
+        "locked": false,
+        "generated": true
+      }
+    ]
+  },
+  "constraints": [
+    {
+      "assistant_id": "f1f04d0e",
+      "unavailable_dates": [
+        "2026-08-10",
+        "2026-08-07",
+        "2026-08-06",
+        "2026-08-05",
+        "2026-08-03",
+        "2026-08-12"
+      ],
+      "vacation_ranges": [
+        [
+          "2026-08-01",
+          "2026-08-09"
+        ]
+      ],
+      "max_consecutive_days": 3,
+      "min_block_days": 1,
+      "target_shifts": null
+    },
+    {
+      "assistant_id": "4a0921a3",
+      "unavailable_dates": [],
+      "vacation_ranges": [],
+      "max_consecutive_days": 3,
+      "min_block_days": 1,
+      "target_shifts": null
+    },
+    {
+      "assistant_id": "312442c2",
+      "unavailable_dates": [],
+      "vacation_ranges": [],
+      "max_consecutive_days": 3,
+      "min_block_days": 1,
+      "target_shifts": null
+    },
+    {
+      "assistant_id": "4874d6d5",
+      "unavailable_dates": [],
+      "vacation_ranges": [],
+      "max_consecutive_days": 3,
+      "min_block_days": 1,
+      "target_shifts": null
+    }
+  ],
+  "seed": 42,
+  "created_at": "2026-08-09T12:46:29.875426",
+  "modified_at": "2026-08-09T13:52:20.652655"
+}

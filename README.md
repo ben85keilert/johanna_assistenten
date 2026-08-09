@@ -2,6 +2,8 @@
 
 Eine PySide6-Anwendung zur Verwaltung und Planung von Assistentendiensten für einen Monat.
 
+**Worum es geht und wie das Programm funktionieren soll, steht in [BESCHREIBUNG.md](BESCHREIBUNG.md)** — das ist die Orientierung für alle Funktionen.
+
 ## Features
 
 - **Team-Verwaltung:** Bis zu 10 Assistenten mit individuellen Farben
@@ -40,6 +42,46 @@ python main.py
 ├── persistence/            # JSON Speichern/Laden
 └── requirements.txt        # Abhängigkeiten
 ```
+
+## Windows-Build (.exe)
+
+Für den realen Einsatz wird das Programm als Windows-Programm gebaut. PyInstaller
+erzeugt Windows-Binaries nur unter Windows — der Build läuft also entweder auf
+einem Windows-Rechner oder automatisch über GitHub Actions.
+
+### Variante A: Manuell auf einem Windows-Rechner
+
+1. [Python 3.12+](https://www.python.org/downloads/windows/) installieren
+   (Häkchen bei „Add python.exe to PATH" setzen).
+2. Projekt herunterladen/klonen und in der Eingabeaufforderung in den Projektordner wechseln.
+3. Virtuelle Umgebung anlegen und Abhängigkeiten installieren:
+   ```bat
+   python -m venv .venv
+   .venv\Scripts\activate
+   pip install -r requirements.txt pyinstaller
+   ```
+4. Build starten:
+   ```bat
+   pyinstaller --noconsole --onedir --name JohannaAssistenten main.py
+   ```
+5. Das fertige Programm liegt in `dist\JohannaAssistenten\` —
+   den ganzen Ordner kopieren und `JohannaAssistenten.exe` starten.
+
+Die Daten (`data\` mit Team, Plänen und Einstellungen) legt das Programm neben der
+`.exe` an. Beim Update einfach die neue `.exe`/den neuen Ordner über den alten
+kopieren — der `data\`-Ordner bleibt erhalten und alte Dateien werden beim Laden
+automatisch auf das neue Format migriert (siehe BESCHREIBUNG.md).
+
+### Variante B: Automatisch über GitHub Actions
+
+Der Workflow [.github/workflows/build-windows.yml](.github/workflows/build-windows.yml)
+baut die Windows-Version in der Cloud:
+
+- **Manuell**: auf GitHub unter *Actions → Windows-Build → Run workflow* starten;
+  das Ergebnis liegt danach als Artifact (`JohannaAssistenten-windows.zip`) zum
+  Download bereit.
+- **Release**: beim Pushen eines Tags `v*` (z. B. `git tag v1.0 && git push --tags`)
+  wird gebaut und die ZIP-Datei automatisch an das GitHub-Release angehängt.
 
 ## Verwendung
 

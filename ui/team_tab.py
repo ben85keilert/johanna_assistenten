@@ -43,8 +43,10 @@ class TeamTab(QWidget):
 
         # Tabelle
         self.table = QTableWidget()
-        self.table.setColumnCount(4)
-        self.table.setHorizontalHeaderLabels(["Farbe", "Name", "Ziel-Dienste", "Max. Folge"])
+        self.table.setColumnCount(5)
+        self.table.setHorizontalHeaderLabels(
+            ["Farbe", "Name", "Ziel-Dienste", "Max. Folge", "Min. Block"]
+        )
         self.table.doubleClicked.connect(self.on_double_click)
         self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         layout.addWidget(self.table)
@@ -84,6 +86,12 @@ class TeamTab(QWidget):
             max_item = QTableWidgetItem(max_consecutive)
             max_item.setFlags(max_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
             self.table.setItem(i, 3, max_item)
+
+            # Min. Block (Helfer mit weiter Anreise kommen am Stueck)
+            min_block = str(assistant.constraints.min_block_days)
+            min_item = QTableWidgetItem(min_block)
+            min_item.setFlags(min_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            self.table.setItem(i, 4, min_item)
 
         # Button-Status
         self.add_btn.setEnabled(len(self.plan.assistants) < 10)

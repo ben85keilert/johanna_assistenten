@@ -1,0 +1,40 @@
+name: Windows-Build
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Abhaengigkeiten installieren
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pyinstaller
+
+      - name: Build mit PyInstaller
+        run: pyinstaller --noconsole --onedir --name JohannaAssistenten main.py
+
+      - name: ZIP erstellen
+        run: Compress-Archive -Path dist/JohannaAssistenten -DestinationPath JohannaAssistenten-windows.zip
+
+      - name: Artifact hochladen
+        uses: actions/upload-artifact@v4
+        with:
+          name: JohannaAssistenten-windows
+          path: JohannaAssistenten-windows.zip
+
+      - name: An Release anhaengen (nur bei Tag)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: JohannaAssistenten-windows.zip

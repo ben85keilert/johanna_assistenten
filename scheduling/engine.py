@@ -1,8 +1,21 @@
+"""Zufallsgenerator fuer den Monatsplan.
+
+Zyklus (siehe BESCHREIBUNG.md):
+- Manuell gesetzte Eintraege (generated=False) und fixierte (locked=True)
+  bleiben immer stehen und zaehlen fuer die Zielverteilung mit.
+- Nicht fixierte Zufalls-Eintraege werden bei jedem Aufruf entfernt und
+  neu gewuerfelt ("was nicht gefaellt, wird neu vergeben").
+
+Abdeckung: Ein Tag ist voll abgedeckt durch 1x VOLL oder VM + NM.
+Halbe Dienste zaehlen 0,5 fuer die Zielverteilung.
+Helfer mit min_block_days > 1 werden nur in zusammenhaengenden Bloecken
+eingeplant (weite Anreise).
+"""
 from __future__ import annotations
 import random
-from datetime import date, timedelta
-from models import MonthPlan, ShiftEntry, ShiftType
 import calendar
+from datetime import date
+from models import MonthPlan, ShiftEntry, ShiftType
 
 
 def is_unavailable(assistant, day: int, year: int, month: int) -> bool:
@@ -15,111 +28,163 @@ def is_unavailable(assistant, day: int, year: int, month: int) -> bool:
     return False
 
 
+def shift_weight(shift_type: ShiftType) -> float:
+    return 1.0 if shift_type == ShiftType.FULL else 0.5
+
+
+def _works_on(plan: MonthPlan, assistant_id: str, day: int) -> bool:
+    return any(e.assistant_id == assistant_id for e in plan.schedule.get(day, []))
+
+
+def _run_length_if_assigned(plan: MonthPlan, assistant_id: str, first_day: int, last_day: int) -> int:
+    """Laenge der zusammenhaengenden Dienstfolge, wenn first_day..last_day
+    zusaetzlich zugewiesen wuerden (bestehende Nachbartage zaehlen mit)."""
+    length = last_day - first_day + 1
+    day = first_day - 1
+    while day >= 1 and _works_on(plan, assistant_id, day):
+        length += 1
+        day -= 1
+    day = last_day + 1
+    while _works_on(plan, assistant_id, day):
+        length += 1
+        day += 1
+    return length
+
+
 def exceeds_consecutive(plan: MonthPlan, assistant_id: str, day: int) -> bool:
+    """True, wenn ein Dienst an diesem Tag die max. Folgetage ueberschreiten wuerde."""
     max_days = next(
         (a.constraints.max_consecutive_days for a in plan.assistants if a.id == assistant_id),
-        3
+        3,
+    )
+    return _run_length_if_assigned(plan, assistant_id, day, day) > max_days
+
+
+def _day_needs(plan: MonthPlan, day: int) -> ShiftType | None:
+    """Welcher Dienst fehlt an diesem Tag noch? None = Tag ist abgedeckt."""
+    entries = plan.schedule.get(day, [])
+    if any(e.shift_type == ShiftType.FULL for e in entries):
+        return None
+    has_vm = any(e.shift_type == ShiftType.HALF_MORNING for e in entries)
+    has_nm = any(e.shift_type == ShiftType.HALF_AFTERNOON for e in entries)
+    if has_vm and has_nm:
+        return None
+    if has_vm:
+        return ShiftType.HALF_AFTERNOON
+    if has_nm:
+        return ShiftType.HALF_MORNING
+    return ShiftType.FULL
+
+
+def _add_entry(plan: MonthPlan, day: int, assistant_id: str, shift_type: ShiftType) -> None:
+    plan.schedule.setdefault(day, []).append(
+        ShiftEntry(assistant_id=assistant_id, shift_type=shift_type, generated=True)
     )
 
-    streak = 0
-    for check_day in range(day - 1, max(0, day - 3), -1):
-        entries = plan.schedule.get(check_day, [])
-        if any(e.assistant_id == assistant_id for e in entries):
-            streak += 1
-        else:
-            break
 
-    return streak >= max_days
-
-
-def generate(plan: MonthPlan, seed: int | None = None, respect_locked: bool = False) -> MonthPlan:
-    if seed is not None:
-        rng = random.Random(seed)
-    else:
-        rng = random.Random()
-
+def generate(plan: MonthPlan, seed: int | None = None) -> MonthPlan:
+    rng = random.Random(seed) if seed is not None else random.Random()
     year, month = plan.year, plan.month
     days_in_month = calendar.monthrange(year, month)[1]
 
-    # Bestimme freie Tage (nicht gesperrt)
-    free_days = []
-    for day in range(1, days_in_month + 1):
-        if respect_locked:
-            entries = plan.schedule.get(day, [])
-            if any(e.locked for e in entries):
-                continue
-        else:
-            if day in plan.schedule and plan.schedule[day]:
-                if not respect_locked:
-                    plan.schedule[day] = []
+    # 1. Nicht fixierte Zufalls-Eintraege entfernen (Neuwuerfeln)
+    for day in list(plan.schedule.keys()):
+        plan.schedule[day] = [
+            e for e in plan.schedule[day] if not e.generated or e.locked
+        ]
+        if not plan.schedule[day]:
+            del plan.schedule[day]
 
-        free_days.append(day)
-
-    if not respect_locked:
-        plan.schedule.clear()
-        free_days = list(range(1, days_in_month + 1))
-
-    active_assistants = [a for a in plan.assistants if a.active]
-    if not active_assistants:
+    active = [a for a in plan.assistants if a.active]
+    if not active:
         return plan
 
-    # Zielanzahl pro Assistent
-    target_counts = {}
-    num_free_days = len(free_days)
-    for assistant in active_assistants:
-        if assistant.constraints.target_shifts is not None:
-            target_counts[assistant.id] = assistant.constraints.target_shifts
+    # 2. Zielzahlen und bereits vergebene Dienste (VOLL=1, VM/NM=0,5)
+    assigned = {a.id: 0.0 for a in active}
+    for entries in plan.schedule.values():
+        for e in entries:
+            if e.assistant_id in assigned:
+                assigned[e.assistant_id] += shift_weight(e.shift_type)
+
+    targets = {}
+    for a in active:
+        if a.constraints.target_shifts is not None:
+            targets[a.id] = float(a.constraints.target_shifts)
         else:
-            target_counts[assistant.id] = num_free_days / len(active_assistants)
+            targets[a.id] = days_in_month / len(active)
 
-    # Shuffle free days
-    rng.shuffle(free_days)
-
-    # Zaehl aktuell zugewiesene Dienste
-    assigned_counts = {}
-    for assistant in active_assistants:
-        count = sum(
-            1 for entries in plan.schedule.values()
-            for e in entries
-            if e.assistant_id == assistant.id
-        )
-        assigned_counts[assistant.id] = count
-
-    # Greedy-Zuweisung
     tolerance = 1.5
-    for day in free_days:
-        # Verfuegbare Assistenten
-        available = []
-        for assistant in active_assistants:
-            if is_unavailable(assistant, day, year, month):
-                continue
-            if exceeds_consecutive(plan, assistant.id, day):
-                continue
-            if assigned_counts[assistant.id] < target_counts[assistant.id] + tolerance:
-                available.append(assistant)
 
+    def candidates(day: int, needed_weight: float, pool) -> list:
+        result = []
+        for a in pool:
+            if _works_on(plan, a.id, day):
+                continue
+            if is_unavailable(a, day, year, month):
+                continue
+            if exceeds_consecutive(plan, a.id, day):
+                continue
+            if assigned[a.id] + needed_weight <= targets[a.id] + tolerance:
+                result.append(a)
+        return result
+
+    def pick(pool: list):
+        return min(pool, key=lambda a: (assigned[a.id], rng.random()))
+
+    block_assistants = [a for a in active if a.constraints.min_block_days > 1]
+    single_assistants = [a for a in active if a.constraints.min_block_days <= 1]
+
+    # 3. Blockvergabe: Helfer mit weiter Anreise bekommen zusammenhaengende
+    #    VOLL-Bloecke von min_block_days Laenge auf noch komplett freien Tagen
+    rng.shuffle(block_assistants)
+    for a in block_assistants:
+        block_len = a.constraints.min_block_days
+        while assigned[a.id] + block_len <= targets[a.id] + tolerance:
+            starts = []
+            for start in range(1, days_in_month - block_len + 2):
+                days = range(start, start + block_len)
+                if not all(_day_needs(plan, d) == ShiftType.FULL for d in days):
+                    continue
+                if any(is_unavailable(a, d, year, month) for d in days):
+                    continue
+                run = _run_length_if_assigned(plan, a.id, start, start + block_len - 1)
+                if run > a.constraints.max_consecutive_days:
+                    continue
+                starts.append(start)
+            if not starts:
+                break
+            start = rng.choice(starts)
+            for d in range(start, start + block_len):
+                _add_entry(plan, d, a.id, ShiftType.FULL)
+            assigned[a.id] += block_len
+
+    # 4. Restliche Tage einzeln fuellen (VOLL fuer leere Tage,
+    #    fehlende Haelfte fuer halb abgedeckte Tage)
+    open_days = [d for d in range(1, days_in_month + 1) if _day_needs(plan, d) is not None]
+    rng.shuffle(open_days)
+    for day in open_days:
+        needed = _day_needs(plan, day)
+        if needed is None:
+            continue
+        weight = shift_weight(needed)
+
+        # Blockfahrer nur als Notloesung fuer einzelne Resttage
+        available = candidates(day, weight, single_assistants)
         if not available:
-            # Toleranz lockern
+            available = candidates(day, weight, block_assistants)
+        if not available:
+            # Toleranz lockern: Zielzahl-Grenze ignorieren
             available = [
-                a for a in active_assistants
-                if not is_unavailable(a, day, year, month)
+                a for a in active
+                if not _works_on(plan, a.id, day)
+                and not is_unavailable(a, day, year, month)
                 and not exceeds_consecutive(plan, a.id, day)
             ]
-
         if not available:
             continue
 
-        # Waehle Assistent mit wenigsten Diensten
-        chosen = min(
-            available,
-            key=lambda a: (assigned_counts[a.id], rng.random())
-        )
-
-        if day not in plan.schedule:
-            plan.schedule[day] = []
-        plan.schedule[day].append(
-            ShiftEntry(assistant_id=chosen.id, shift_type=ShiftType.FULL)
-        )
-        assigned_counts[chosen.id] += 1
+        chosen = pick(available)
+        _add_entry(plan, day, chosen.id, needed)
+        assigned[chosen.id] += weight
 
     return plan
