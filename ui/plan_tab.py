@@ -25,6 +25,7 @@ STAMP_VM = "vm"
 STAMP_NM = "nm"
 STAMP_VACATION = "vacation"
 STAMP_LOCK = "lock"
+STAMP_DELETE = "delete"
 
 STAMP_SHIFTS = {
     STAMP_FULL: ShiftType.FULL,
@@ -53,7 +54,8 @@ class PlanTab(QWidget):
         self.settings = settings
         self.active_stamp: str | None = None
         self._assistant_by_id = {}
-        self._target_spins = {}  # assistant_id -> QSpinBox
+        self._target_spins = {}  # assistant_id -> BigStepper
+        self._group1_row_offset = 0
         self.init_ui()
 
     def init_ui(self):
@@ -92,6 +94,7 @@ class PlanTab(QWidget):
             (STAMP_NM, "NM"),
             (STAMP_VACATION, "Urlaub"),
             (STAMP_LOCK, "Fixieren"),
+            (STAMP_DELETE, "Loeschen"),
         ]:
             btn = QPushButton(label)
             btn.setCheckable(True)
@@ -102,11 +105,15 @@ class PlanTab(QWidget):
             self.stamp_buttons[stamp] = btn
             stamp_layout.addWidget(btn)
 
-        self.confirm_check = QCheckBox("Nachfragen")
-        self.confirm_check.setToolTip("Beim Ueberschreiben vorhandener Eintraege nachfragen")
-        self.confirm_check.setChecked(self.settings.confirm_overwrite)
-        self.confirm_check.toggled.connect(self.on_confirm_toggled)
-        stamp_layout.addWidget(self.confirm_check)
+        self.overwrite_check = QCheckBox("Ueberschreiben")
+        self.overwrite_check.setToolTip(
+            "An: Stempel duerfen vorhandene Eintraege anderen Typs ersetzen. "
+            "Aus (Standard): nur leere Zellen stempeln bzw. gleiche Stempel "
+            "wieder entfernen."
+        )
+        self.overwrite_check.setChecked(self.settings.allow_overwrite)
+        self.overwrite_check.toggled.connect(self.on_overwrite_toggled)
+        stamp_layout.addWidget(self.overwrite_check)
         stamp_box.setLayout(stamp_layout)
         tools_layout.addWidget(stamp_box)
 
@@ -126,11 +133,15 @@ class PlanTab(QWidget):
         self.reset_btn.clicked.connect(self.reset_schedule)
         dice_layout.addWidget(self.reset_btn)
 
-        dice_layout.addWidget(QLabel("Seed:"))
+        self.seed_label = QLabel("Seed:")
+        dice_layout.addWidget(self.seed_label)
         self.seed_spin = QSpinBox()
         self.seed_spin.setRange(0, 999999)
         self.seed_spin.setValue(self.settings.seed)
         self.seed_spin.valueChanged.connect(self.on_seed_changed)
+        # Ohne Deterministisch hat der Seed keine Wirkung -> ausgrauen
+        self.seed_spin.setEnabled(self.settings.deterministic)
+        self.seed_label.setEnabled(self.settings.deterministic)
         dice_layout.addWidget(self.seed_spin)
 
         self.deterministic_check = QCheckBox("Deterministisch")
@@ -170,14 +181,16 @@ class PlanTab(QWidget):
 
     # --- Einstellungen ---
 
-    def on_confirm_toggled(self, checked: bool):
-        self.settings.confirm_overwrite = checked
+    def on_overwrite_toggled(self, checked: bool):
+        self.settings.allow_overwrite = checked
 
     def on_seed_changed(self, value: int):
         self.settings.seed = value
 
     def on_deterministic_toggled(self, checked: bool):
         self.settings.deterministic = checked
+        self.seed_spin.setEnabled(checked)
+        self.seed_label.setEnabled(checked)
 
     def on_view_changed(self):
         self.settings.split_view = bool(self.view_combo.currentData())
@@ -208,15 +221,6 @@ class PlanTab(QWidget):
         if ref:
             self.apply_stamp(self.active_stamp, [ref])
 
-    def _confirm(self, message: str) -> bool:
-        if not self.settings.confirm_overwrite:
-            return True
-        reply = QMessageBox.question(
-            self, "Ueberschreiben?", message,
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-        )
-        return reply == QMessageBox.StandardButton.Yes
-
     def _entry_at(self, assistant_id: str, day: int) -> ShiftEntry | None:
         return next(
             (e for e in self.plan.schedule.get(day, []) if e.assistant_id == assistant_id),
@@ -231,28 +235,21 @@ class PlanTab(QWidget):
 
     def _set_entry(self, assistant_id: str, day: int, shift_type: ShiftType):
         self._remove_entry(assistant_id, day)
+        # Gestempelte Dienste sind automatisch fixiert (Fixpunkte)
         self.plan.schedule.setdefault(day, []).append(
-            ShiftEntry(assistant_id=assistant_id, shift_type=shift_type)
+            ShiftEntry(assistant_id=assistant_id, shift_type=shift_type, locked=True)
         )
 
     def apply_stamp(self, stamp: str, cells: list[tuple[str, int]]):
-        """Wendet einen Stempel auf Zellen (assistant_id, day) an. Gleicher
-        Eintrag -> entfernen, anderer Eintrag -> nach Rueckfrage ueberschreiben."""
+        """Wendet einen Stempel auf Zellen (assistant_id, day) an.
+
+        Gleicher Eintrag -> entfernen (Toggle), leere Zelle -> setzen.
+        Eintraege anderen Typs werden nur ersetzt, wenn "Ueberschreiben"
+        eingeschaltet ist - sonst passiert nichts.
+        """
         if not self.plan:
             return
-
-        # Rueckfrage gesammelt fuer alle betroffenen Zellen
-        to_overwrite = 0
-        for assistant_id, day in cells:
-            entry = self._entry_at(assistant_id, day)
-            if stamp in STAMP_SHIFTS and entry and entry.shift_type != STAMP_SHIFTS[stamp]:
-                to_overwrite += 1
-            if stamp == STAMP_VACATION and entry:
-                to_overwrite += 1
-        if to_overwrite and not self._confirm(
-            f"{to_overwrite} vorhandene(n) Eintrag/Eintraege ueberschreiben?"
-        ):
-            return
+        allow_overwrite = self.settings.allow_overwrite
 
         changed = False
         for assistant_id, day in cells:
@@ -261,12 +258,20 @@ class PlanTab(QWidget):
                 continue
             entry = self._entry_at(assistant_id, day)
 
-            if stamp in STAMP_SHIFTS:
+            if stamp == STAMP_DELETE:
+                # Entfernt Stempel und Zufalls-Vorschlaege
+                if entry:
+                    self._remove_entry(assistant_id, day)
+                    changed = True
+
+            elif stamp in STAMP_SHIFTS:
                 shift_type = STAMP_SHIFTS[stamp]
                 if entry and entry.shift_type == shift_type:
                     self._remove_entry(assistant_id, day)
-                else:
+                elif entry is None or allow_overwrite:
                     self._set_entry(assistant_id, day, shift_type)
+                else:
+                    continue
                 changed = True
 
             elif stamp == STAMP_VACATION:
@@ -275,7 +280,9 @@ class PlanTab(QWidget):
                 if d in days:
                     days.discard(d)
                 else:
-                    if entry:
+                    if entry is not None:
+                        if not allow_overwrite:
+                            continue
                         self._remove_entry(assistant_id, day)
                     days.add(d)
                 # Zusammenhaengende Tage werden automatisch zu
@@ -538,7 +545,7 @@ class PlanTab(QWidget):
         shift_menu.addAction("Tagesdienst (VOLL)", lambda: self.apply_stamp(STAMP_FULL, cells))
         shift_menu.addAction("VM (Vormittag)", lambda: self.apply_stamp(STAMP_VM, cells))
         shift_menu.addAction("NM (Nachmittag)", lambda: self.apply_stamp(STAMP_NM, cells))
-        menu.addAction("Loeschen" + suffix, lambda: self.delete_cells(cells))
+        menu.addAction("Loeschen" + suffix, lambda: self.apply_stamp(STAMP_DELETE, cells))
         menu.addSeparator()
         menu.addAction("Urlaub setzen/entfernen" + suffix,
                        lambda: self.apply_stamp(STAMP_VACATION, cells))
@@ -547,22 +554,6 @@ class PlanTab(QWidget):
         menu.addAction("Fixierung loesen" + suffix, lambda: self.set_locked(cells, False))
 
         menu.exec(self.table.mapToGlobal(pos))
-
-    def delete_cells(self, cells: list[tuple[str, int]]):
-        if not self.plan:
-            return
-        existing = [
-            (assistant_id, day) for assistant_id, day in cells
-            if self._entry_at(assistant_id, day)
-        ]
-        if not existing:
-            return
-        if not self._confirm(f"{len(existing)} Eintrag/Eintraege loeschen?"):
-            return
-        for assistant_id, day in existing:
-            self._remove_entry(assistant_id, day)
-        self.refresh_display()
-        self.plan_modified.emit()
 
     def set_locked(self, cells: list[tuple[str, int]], locked: bool):
         if not self.plan:

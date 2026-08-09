@@ -9,7 +9,7 @@ from __future__ import annotations
 
 CURRENT_TEAM_VERSION = 3
 CURRENT_PLAN_VERSION = 3
-CURRENT_SETTINGS_VERSION = 2
+CURRENT_SETTINGS_VERSION = 3
 
 
 def migrate_team(data) -> dict:
@@ -80,7 +80,14 @@ def migrate_settings(data: dict) -> dict:
     if version < 2:
         # v1 -> v2: geteilte Kalenderansicht (zwei Monatshaelften untereinander)
         data.setdefault("split_view", False)
-        data["version"] = 2
+        version = 2
+
+    if version < 3:
+        # v2 -> v3: "Beim Ueberschreiben nachfragen" wird zu "Ueberschreiben
+        # erlauben" - bewusst standardmaessig aus
+        data.pop("confirm_overwrite", None)
+        data.setdefault("allow_overwrite", False)
+        version = 3
 
     data["version"] = CURRENT_SETTINGS_VERSION
     return data

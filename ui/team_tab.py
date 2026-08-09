@@ -17,7 +17,6 @@ import uuid
 from . import theme
 from .widgets.color_button import ColorButton
 from .widgets.big_stepper import BigStepper
-from .constraints_dialog import ConstraintsDialog
 
 
 class TeamTab(QWidget):
@@ -57,9 +56,10 @@ class TeamTab(QWidget):
 
     def init_ui(self):
         self._init_filter_bar()
-        layout = QVBoxLayout()
+        layout = QHBoxLayout()
 
-        # Buttons
+        # Linke Seite: Helferliste mit Buttons
+        left_layout = QVBoxLayout()
         button_layout = QHBoxLayout()
         self.add_btn = QPushButton("+ Helfer hinzufuegen")
         self.add_btn.clicked.connect(self.add_assistant)
@@ -69,15 +69,8 @@ class TeamTab(QWidget):
         self.remove_btn.clicked.connect(self.remove_assistant)
         button_layout.addWidget(self.remove_btn)
 
-        self.edit_constraints_btn = QPushButton("Einzeltage/Details bearbeiten")
-        self.edit_constraints_btn.setToolTip(
-            "Kalender fuer nicht verfuegbare Einzeltage und weitere Details"
-        )
-        self.edit_constraints_btn.clicked.connect(self.edit_constraints)
-        button_layout.addWidget(self.edit_constraints_btn)
-
         button_layout.addStretch()
-        layout.addLayout(button_layout)
+        left_layout.addLayout(button_layout)
 
         # Tabelle: Werte direkt in der Zeile aenderbar (grosse +/- Buttons)
         self.table = QTableWidget()
@@ -85,10 +78,10 @@ class TeamTab(QWidget):
         self.table.setHorizontalHeaderLabels(
             ["Farbe", "Name", "Ziel-Dienste", "Max. Folge", "Min. Block"]
         )
-        self.table.doubleClicked.connect(self.on_double_click)
-        layout.addWidget(self.table)
+        left_layout.addWidget(self.table)
+        layout.addLayout(left_layout, stretch=3)
 
-        # Urlaubsuebersicht: alle Urlaube chronologisch sortiert
+        # Rechte Seite: Urlaubsuebersicht, chronologisch sortiert
         vacation_group = QGroupBox("Urlaube (chronologisch)")
         vacation_layout = QVBoxLayout()
         self.vacation_list = QListWidget()
@@ -109,7 +102,7 @@ class TeamTab(QWidget):
         vacation_layout.addLayout(vacation_buttons)
 
         vacation_group.setLayout(vacation_layout)
-        layout.addWidget(vacation_group)
+        layout.addWidget(vacation_group, stretch=2)
 
         self.setLayout(layout)
 
@@ -250,24 +243,6 @@ class TeamTab(QWidget):
             self.refresh_vacations()
             self.assistants_changed.emit()
 
-    def edit_constraints(self):
-        if not self.plan:
-            return
-
-        row = self.table.currentRow()
-        if row < 0:
-            QMessageBox.warning(self, "Warnung", "Bitte waehlen Sie einen Helfer aus.")
-            return
-
-        assistant = self.plan.assistants[row]
-        dialog = ConstraintsDialog(
-            assistant, self.plan.year, self.plan.month, parent=self
-        )
-        if dialog.exec():
-            self.refresh_table()
-            self.refresh_vacations()
-            self.assistants_changed.emit()
-
     def _save_names_from_table(self):
         if not self.plan:
             return
@@ -275,11 +250,6 @@ class TeamTab(QWidget):
             name_item = self.table.item(i, 1)
             if name_item and i < len(self.plan.assistants):
                 self.plan.assistants[i].name = name_item.text()
-
-    def on_double_click(self, index):
-        if index.column() == 1:  # Name-Spalte
-            self._save_names_from_table()
-            self.edit_constraints()
 
     # --- Urlaube ---
 

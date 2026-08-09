@@ -4,7 +4,7 @@
   "last_month": 8,
   "window_geometry": "01d9d0cb0003000000000000ffffffda000005ff000003190000000100000019000005fe00000332000000000200000006000000000000000000000005ff00000319",
   "confirm_overwrite": true,
-  "seed": 1,
+  "seed": 4,
   "deterministic": true,
-  "split_view": true
+  "split_view": false
 }

@@ -67,10 +67,13 @@ Zwei Tabs:
    - Neben dem Namen stehen pro Helfer die **Soll-Dienste** (Minus/Plus-Buttons,
      „Auto" = gleichmäßig verteilen) und die **belegten Dienste** als Tupel
      `VOLL | VM | NM`.
-   - **Stempel-Buttons**: Tagesdienst | VM | NM | Urlaub | Fixieren. Ein aktiver
-     Stempel wird per Klick auf eine Zelle angewendet; erneuter Klick entfernt den
-     Eintrag wieder. Beim Überschreiben vorhandener Einträge wird nachgefragt
-     (Nachfrage abschaltbar).
+   - **Stempel-Buttons**: Tagesdienst | VM | NM | Urlaub | Fixieren | Löschen.
+     Ein aktiver Stempel wird per Klick auf eine Zelle angewendet; erneuter Klick
+     auf denselben Stempeltyp entfernt ihn wieder. **Gestempelte Dienste sind
+     automatisch fixiert** (Fixpunkte, mit Schloss). Einträge eines *anderen*
+     Typs bleiben unangetastet — außer die Checkbox **„Überschreiben"** ist
+     bewusst eingeschaltet (Standard: aus), dann ersetzt der Stempel sie.
+     **Löschen** entfernt Stempel und Zufalls-Vorschläge per Klick.
    - **Mehrfachauswahl**: mit Strg/Shift lassen sich mehrere Zellen (auch verstreut)
      markieren; das Rechtsklick-Menü wirkt dann auf alle markierten Zellen.
    - **Urlaub** im Raster: zusammenhängend gestempelte Tage werden automatisch
@@ -79,11 +82,11 @@ Zwei Tabs:
      Zeitraum wieder entfernt, teilt sich der Zeitraum entsprechend.
    - Unter dem Raster: Zusammenfassung pro Helfer als Tupel `Name (VOLL|VM|NM)`
      mit Legende sowie Warnhinweise (unbesetzte/halbe Tage, Zielabweichungen).
-2. **Team-Tab**: Helfer anlegen/entfernen, Name und Farbe setzen. **Ziel-Dienste,
-   Max. Folge und Min. Block werden direkt in der Tabelle** mit Minus/Plus-Buttons
-   gestellt (Min. Block und Max. Folge halten sich dabei automatisch konsistent);
-   der Einschränkungen-Dialog bleibt für nicht verfügbare Einzeltage per Kalender.
-   Darunter die **Urlaubsübersicht**: alle Abwesenheiten aller Helfer
+2. **Team-Tab**: Links die Helferliste (anlegen/entfernen, Name und Farbe;
+   **Ziel-Dienste, Max. Folge und Min. Block direkt in der Tabelle** mit
+   Minus/Plus-Buttons, Min. Block und Max. Folge halten sich automatisch
+   konsistent). Einzelne Abwesenheitstage stempelt man direkt im Planraster
+   (Urlaub-Stempel). Rechts daneben die **Urlaubsübersicht**: alle Abwesenheiten aller Helfer
    chronologisch sortiert — Zeiträume **und Einzeltage**, monatsübergreifend.
    Hinzufügen, **Bearbeiten** (Button oder Doppelklick) und Entfernen über
    Dialoge mit Kalender-Datumsfeldern; überlappende oder angrenzende Zeiträume
@@ -93,8 +96,9 @@ Zwei Tabs:
 
 ### Generier-Zyklus: Fixieren und Neuwürfeln
 
-1. Man setzt zuerst die **Fixpunkte** von Hand (z. B. „Martha kommt am 1.–2. VOLL,
-   am 3. nur VM"). Manuell Gesetztes bleibt immer stehen.
+1. Man stempelt zuerst die **Fixpunkte** von Hand (z. B. „Martha kommt am 1.–2.
+   VOLL, am 3. nur VM"). Gestempelte Dienste sind automatisch fixiert und
+   bleiben immer stehen.
 2. **Neu würfeln** füllt die restlichen Tage zufällig, unter Beachtung aller
    Regeln. Zufällig vergebene Dienste tragen einen **Punkt**.
 3. Was gefällt, **fixiert** man per Klick (Fixieren-Stempel oder Rechtsklick).
@@ -163,10 +167,10 @@ Enthält den Dienstplan des Monats und als einzige monatsbezogene Vorgabe die
 
 ```json
 {
-  "version": 2,
+  "version": 3,
   "last_year": 2026, "last_month": 8,
   "window_geometry": "…",
-  "confirm_overwrite": true,
+  "allow_overwrite": false,
   "seed": 42, "deterministic": true,
   "split_view": false
 }
