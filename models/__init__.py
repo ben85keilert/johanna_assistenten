@@ -1,5 +1,5 @@
 from .shift import ShiftType, ShiftEntry
-from .assistant import Assistant, AssistantConstraints
+from .assistant import Assistant, AssistantConstraints, absence_days, set_absence_days
 from .plan import MonthPlan
 
 __all__ = [
@@ -7,5 +7,7 @@ __all__ = [
     "ShiftEntry",
     "Assistant",
     "AssistantConstraints",
+    "absence_days",
+    "set_absence_days",
     "MonthPlan",
 ]

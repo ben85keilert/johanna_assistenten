@@ -40,6 +40,22 @@ Jeder Helfer hat eigene Vorgaben:
 
 Weitere Bedingungen (z. B. Wochenend-Fairness) folgen später und werden hier ergänzt.
 
+## Bedienfreundlichkeit
+
+**Das Programm gehört konsequent nutzerfreundlich gestaltet.** Konkret heißt das:
+
+- Große, gut klickbare Bedienelemente; keine winzigen Auf/Ab-Pfeile. Zahlenwerte
+  werden über nebeneinanderliegende Minus/Plus-Buttons gestellt, die beim
+  Gedrückthalten automatisch weiterzählen.
+- **Zentrale Steuerleiste** zwischen Menü und Tabs, bewusst übergroß: Sie zeigt
+  das zuletzt angeklickte Wertefeld und ändert dessen Wert mit großen ▲/▼-Buttons;
+  mit ◀/▶ springt man zum vorherigen/nächsten Wertefeld, ohne die Felder in der
+  Tabelle treffen zu müssen.
+- Große Schrift und Zeilenhöhen. Alle Größen sind zentral im Theme
+  (`ui/theme.py`) einstellbar.
+- Änderungen sind sofort in beiden Tabs sichtbar — nichts muss doppelt gepflegt
+  werden.
+
 ## Bedienkonzept
 
 Zwei Tabs:
@@ -48,24 +64,29 @@ Zwei Tabs:
    - **Zwei Ansichten** (umschaltbar, wird gemerkt): *Breit* (der ganze Monat in
      einer Zeile) oder *Zweigeteilt* (zweite Monatshälfte unter der ersten — man
      scrollt vertikal statt horizontal).
-   - Neben dem Namen stehen pro Helfer die **Soll-Dienste** (mit breiten
-     Hoch/Runter-Buttons einstellbar, „Auto" = gleichmäßig verteilen) und die
-     **belegten Dienste** als Tupel `VOLL | VM | NM`.
+   - Neben dem Namen stehen pro Helfer die **Soll-Dienste** (Minus/Plus-Buttons,
+     „Auto" = gleichmäßig verteilen) und die **belegten Dienste** als Tupel
+     `VOLL | VM | NM`.
    - **Stempel-Buttons**: Tagesdienst | VM | NM | Urlaub | Fixieren. Ein aktiver
      Stempel wird per Klick auf eine Zelle angewendet; erneuter Klick entfernt den
      Eintrag wieder. Beim Überschreiben vorhandener Einträge wird nachgefragt
      (Nachfrage abschaltbar).
    - **Mehrfachauswahl**: mit Strg/Shift lassen sich mehrere Zellen (auch verstreut)
      markieren; das Rechtsklick-Menü wirkt dann auf alle markierten Zellen.
-   - **Urlaub** im Raster trägt den Tag als „nicht verfügbar" beim Helfer ein
-     (dieselben Daten wie im Einschränkungen-Dialog).
+   - **Urlaub** im Raster: zusammenhängend gestempelte Tage werden automatisch
+     zu Urlaubszeiträumen zusammengefasst und erscheinen in der Urlaubsübersicht
+     des Team-Tabs; Einzeltage bleiben Einzeltage. Wird ein Tag mitten aus einem
+     Zeitraum wieder entfernt, teilt sich der Zeitraum entsprechend.
    - Unter dem Raster: Zusammenfassung pro Helfer als Tupel `Name (VOLL|VM|NM)`
      mit Legende sowie Warnhinweise (unbesetzte/halbe Tage, Zielabweichungen).
-2. **Team-Tab**: Helfer anlegen/entfernen, Name und Farbe setzen, Einschränkungen
-   bearbeiten (Doppelklick oder Button). Darunter die **Urlaubsübersicht**: alle
-   Urlaube aller Helfer chronologisch sortiert; „Hinzufügen" öffnet einen Dialog
-   mit Helferauswahl und Kalender-Datumsfeldern, längere Zeiträume trägt man hier
-   ein.
+2. **Team-Tab**: Helfer anlegen/entfernen, Name und Farbe setzen. **Ziel-Dienste,
+   Max. Folge und Min. Block werden direkt in der Tabelle** mit Minus/Plus-Buttons
+   gestellt (Min. Block und Max. Folge halten sich dabei automatisch konsistent);
+   der Einschränkungen-Dialog bleibt für nicht verfügbare Einzeltage per Kalender.
+   Darunter die **Urlaubsübersicht**: alle Urlaube aller Helfer chronologisch
+   sortiert; Hinzufügen, **Bearbeiten** (Button oder Doppelklick) und Entfernen
+   über Dialoge mit Kalender-Datumsfeldern. Überlappende oder angrenzende
+   Zeiträume verschmelzen automatisch.
 
 ### Generier-Zyklus: Fixieren und Neuwürfeln
 

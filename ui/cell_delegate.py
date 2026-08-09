@@ -6,6 +6,7 @@ from PySide6.QtGui import QPainter, QColor, QFont, QPen
 
 from models import ShiftType
 from scheduling.engine import is_unavailable
+from . import theme
 
 WEEKEND_COLOR = QColor(235, 235, 235)
 UNAVAILABLE_COLOR = QColor(200, 200, 200)
@@ -95,4 +96,4 @@ class CellDelegate(QStyledItemDelegate):
         painter.restore()
 
     def sizeHint(self, option: QStyleOptionViewItem, index) -> QSize:
-        return QSize(60, 40)
+        return QSize(60, theme.ROW_HEIGHT)

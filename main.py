@@ -13,11 +13,13 @@ from persistence import (
 from ui.main_window import MainWindow
 from ui.team_tab import TeamTab
 from ui.plan_tab import PlanTab
+from ui.theme import apply_theme
 
 
 class JohannaApp:
     def __init__(self):
         self.app = QApplication(sys.argv)
+        apply_theme(self.app)
         self.settings = load_settings()
         self.window = MainWindow()
         self.plan = self._auto_load()
@@ -30,10 +32,11 @@ class JohannaApp:
 
         self.setup_menu()
 
-        # Signale verdrahten
+        # Signale verdrahten: Aenderungen sofort in beiden Tabs sichtbar
         self.team_tab.assistants_changed.connect(self.plan_tab.rebuild_grid)
         self.team_tab.assistants_changed.connect(self.window.mark_modified)
         self.plan_tab.plan_modified.connect(self.window.mark_modified)
+        self.plan_tab.constraints_changed.connect(self.team_tab.refresh_all)
         self.plan_tab.month_change_requested.connect(self.change_month)
         self.window.on_close_save = self.autosave_on_close
 

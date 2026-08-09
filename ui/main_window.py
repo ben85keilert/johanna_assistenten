@@ -1,4 +1,7 @@
-from PySide6.QtWidgets import QMainWindow, QTabWidget, QStatusBar
+from PySide6.QtWidgets import QMainWindow, QTabWidget, QStatusBar, QWidget, QVBoxLayout
+
+from .control_bar import ControlBar
+from .widgets.big_stepper import BigStepper
 
 
 class MainWindow(QMainWindow):
@@ -11,7 +14,20 @@ class MainWindow(QMainWindow):
         self._title_plan = ""
 
         self.tab_widget = QTabWidget()
-        self.setCentralWidget(self.tab_widget)
+
+        # Zentrale Werte-Steuerleiste zwischen Menue und Tabs
+        self.control_bar = ControlBar(self._steppers_in_current_tab)
+        BigStepper.activate_hook = self.control_bar.set_target
+        self.tab_widget.currentChanged.connect(lambda _: self.control_bar._refresh())
+
+        central = QWidget()
+        central_layout = QVBoxLayout()
+        central_layout.setContentsMargins(0, 0, 0, 0)
+        central_layout.setSpacing(0)
+        central_layout.addWidget(self.control_bar)
+        central_layout.addWidget(self.tab_widget)
+        central.setLayout(central_layout)
+        self.setCentralWidget(central)
 
         self.team_tab = None
         self.plan_tab = None
@@ -24,6 +40,17 @@ class MainWindow(QMainWindow):
 
         # Beim Schliessen speichert JohannaApp automatisch (siehe main.py)
         self.on_close_save = None
+
+    def _steppers_in_current_tab(self) -> list[BigStepper]:
+        current = self.tab_widget.currentWidget()
+        if current is None:
+            return []
+        steppers = current.findChildren(BigStepper)
+        # Leserichtung: von oben nach unten, links nach rechts
+        def position(s):
+            p = s.mapTo(current, s.rect().topLeft())
+            return (p.y(), p.x())
+        return sorted(steppers, key=position)
 
     def set_plan_tab(self, tab):
         self.plan_tab = tab

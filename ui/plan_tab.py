@@ -1,18 +1,19 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QTableWidget,
     QTableWidgetItem, QLabel, QSpinBox, QCheckBox, QMessageBox,
-    QHeaderView, QMenu, QAbstractItemView, QButtonGroup, QComboBox,
-    QAbstractSpinBox
+    QHeaderView, QMenu, QAbstractItemView, QButtonGroup, QComboBox
 )
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QFont
 
-from models import MonthPlan, ShiftEntry, ShiftType
+from models import MonthPlan, ShiftEntry, ShiftType, absence_days, set_absence_days
 from persistence import AppSettings
 from datetime import date
 import calendar
 import math
+from . import theme
 from .widgets.month_selector import MonthSelector
+from .widgets.big_stepper import BigStepper
 from .cell_delegate import CellDelegate
 from scheduling.engine import generate
 from scheduling.validator import validate
@@ -38,6 +39,8 @@ DAY_COL_OFFSET = 2
 
 class PlanTab(QWidget):
     plan_modified = Signal()
+    # Einschraenkungen (Soll-Dienste, Urlaube) geaendert -> Team-Tab aktualisieren
+    constraints_changed = Signal()
     month_change_requested = Signal(int, int)  # year, month
 
     def __init__(self, settings: AppSettings, parent=None):
@@ -258,13 +261,16 @@ class PlanTab(QWidget):
 
             elif stamp == STAMP_VACATION:
                 d = date(self.plan.year, self.plan.month, day)
-                unavailable = assistant.constraints.unavailable_dates
-                if d in unavailable:
-                    unavailable.remove(d)
+                days = absence_days(assistant.constraints)
+                if d in days:
+                    days.discard(d)
                 else:
                     if entry:
                         self._remove_entry(assistant_id, day)
-                    unavailable.append(d)
+                    days.add(d)
+                # Zusammenhaengende Tage werden automatisch zu
+                # Urlaubszeitraeumen (Team-Tab) zusammengefasst
+                set_absence_days(assistant.constraints, days)
                 changed = True
 
             elif stamp == STAMP_LOCK:
@@ -275,6 +281,8 @@ class PlanTab(QWidget):
         if changed:
             self.refresh_display()
             self.plan_modified.emit()
+            if stamp == STAMP_VACATION:
+                self.constraints_changed.emit()
 
     # --- Plan/Anzeige ---
 
@@ -299,22 +307,20 @@ class PlanTab(QWidget):
             item.setBackground(background)
         return item
 
-    def _make_target_spin(self, assistant) -> QSpinBox:
-        spin = QSpinBox()
-        spin.setRange(-1, 31)
-        spin.setSpecialValueText("Auto")
-        spin.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.PlusMinus)
-        # Breite Hoch/Runter-Buttons fuer leichtes Klicken
-        spin.setStyleSheet(
-            "QSpinBox::up-button, QSpinBox::down-button { width: 24px; }"
-        )
-        spin.setToolTip("Soll-Dienste diesen Monat (Auto = gleichmaessig verteilen)")
+    def _make_target_stepper(self, assistant) -> BigStepper:
         target = assistant.constraints.target_shifts
-        spin.setValue(-1 if target is None else target)
-        spin.valueChanged.connect(
+        stepper = BigStepper(
+            label=f"{assistant.name}: Soll-Dienste",
+            value=-1 if target is None else target,
+            minimum=-1,
+            maximum=31,
+            special_min_text="Auto",
+        )
+        stepper.setToolTip("Soll-Dienste diesen Monat (Auto = gleichmaessig verteilen)")
+        stepper.value_changed.connect(
             lambda value, aid=assistant.id: self.on_target_changed(aid, value)
         )
-        return spin
+        return stepper
 
     def on_target_changed(self, assistant_id: str, value: int):
         assistant = self._assistant_by_id.get(assistant_id)
@@ -323,6 +329,7 @@ class PlanTab(QWidget):
         assistant.constraints.target_shifts = None if value < 0 else value
         self.update_summary()
         self.plan_modified.emit()
+        self.constraints_changed.emit()
 
     def rebuild_grid(self):
         if not self.plan:
@@ -356,11 +363,13 @@ class PlanTab(QWidget):
 
         separator_bg = QColor(215, 215, 215)
 
+        self.table.verticalHeader().setDefaultSectionSize(theme.ROW_HEIGHT)
+
         # Erste Haelfte (bzw. ganzer Monat)
         for row, assistant in enumerate(assistants):
-            spin = self._make_target_spin(assistant)
-            self._target_spins[assistant.id] = spin
-            self.table.setCellWidget(row, 0, spin)
+            stepper = self._make_target_stepper(assistant)
+            self._target_spins[assistant.id] = stepper
+            self.table.setCellWidget(row, 0, stepper)
             counts_item = self._make_inert_item()
             counts_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self.table.setItem(row, 1, counts_item)
@@ -396,7 +405,8 @@ class PlanTab(QWidget):
 
         header = self.table.horizontalHeader()
         header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
+        self.table.setColumnWidth(0, 2 * theme.STEPPER_BUTTON_W + 64)
         header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         self.refresh_display()
 
