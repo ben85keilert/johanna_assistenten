@@ -37,11 +37,16 @@ def _constraints_to_dict(c: AssistantConstraints, include_target: bool = True) -
         "vacation_ranges": [
             [start.isoformat(), end.isoformat()] for start, end in c.vacation_ranges
         ],
+        "blocked_dates": [d.isoformat() for d in c.blocked_dates],
+        "blocked_ranges": [
+            [start.isoformat(), end.isoformat()] for start, end in c.blocked_ranges
+        ],
         "max_consecutive_days": c.max_consecutive_days,
         "min_block_days": c.min_block_days,
     }
     if include_target:
-        result["target_shifts"] = c.target_shifts
+        result["min_shifts"] = c.min_shifts
+        result["max_shifts"] = c.max_shifts
     return result
 
 
@@ -49,6 +54,8 @@ def _is_default_constraints(c: AssistantConstraints) -> bool:
     return (
         not c.unavailable_dates
         and not c.vacation_ranges
+        and not c.blocked_dates
+        and not c.blocked_ranges
         and c.max_consecutive_days == 3
         and c.min_block_days == 1
     )
@@ -64,9 +71,17 @@ def _constraints_from_dict(c_data: dict, assistant_id: str = "") -> AssistantCon
             (date.fromisoformat(start), date.fromisoformat(end))
             for start, end in c_data.get("vacation_ranges", [])
         ],
+        blocked_dates=[
+            date.fromisoformat(d) for d in c_data.get("blocked_dates", [])
+        ],
+        blocked_ranges=[
+            (date.fromisoformat(start), date.fromisoformat(end))
+            for start, end in c_data.get("blocked_ranges", [])
+        ],
         max_consecutive_days=c_data.get("max_consecutive_days", 3),
         min_block_days=c_data.get("min_block_days", 1),
-        target_shifts=c_data.get("target_shifts"),
+        min_shifts=c_data.get("min_shifts"),
+        max_shifts=c_data.get("max_shifts"),
     )
 
 
@@ -172,7 +187,8 @@ def team_path() -> Path:
 
 def save_team(assistants: list[Assistant]) -> None:
     # Personenbezogene Constraints (Urlaube, Einzeltage, Max/Min) leben
-    # monatsuebergreifend hier; nur target_shifts gehoert zum Monatsplan
+    # monatsuebergreifend hier; nur die Soll-Dienste (min/max) gehoeren
+    # zum Monatsplan
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     data = {
         "version": CURRENT_TEAM_VERSION,
@@ -228,7 +244,10 @@ def save_plan(plan: MonthPlan) -> None:
         "schedule": _schedule_to_dict(plan.schedule),
         # Nur die monatsbezogenen Soll-Dienste; alle uebrigen Constraints
         # liegen monatsuebergreifend in team.json
-        "targets": {a.id: a.constraints.target_shifts for a in plan.assistants},
+        "targets": {
+            a.id: {"min": a.constraints.min_shifts, "max": a.constraints.max_shifts}
+            for a in plan.assistants
+        },
         "seed": plan.seed,
         "created_at": plan.created_at,
         "modified_at": plan.modified_at,
@@ -239,7 +258,8 @@ def save_plan(plan: MonthPlan) -> None:
 
 def load_plan(year: int, month: int, assistants: list[Assistant]) -> MonthPlan | None:
     """Laedt den Monatsplan. Die uebergebenen Assistenten (aus team.json)
-    behalten ihre Constraints; nur target_shifts kommt aus der Monatsdatei."""
+    behalten ihre Constraints; nur die Soll-Dienste (min/max) kommen aus
+    der Monatsdatei."""
     path = plan_path(year, month)
     if not path.exists():
         return None
@@ -268,10 +288,14 @@ def load_plan(year: int, month: int, assistants: list[Assistant]) -> MonthPlan |
             # absolut, so geht aus keiner alten Monatsdatei etwas verloren
             merged = absence_days(assistant.constraints) | absence_days(legacy_constraints)
             set_absence_days(assistant.constraints, merged)
-        if assistant.id in targets:
-            assistant.constraints.target_shifts = targets[assistant.id]
+        target = targets.get(assistant.id)
+        if isinstance(target, dict):
+            assistant.constraints.min_shifts = target.get("min")
+            assistant.constraints.max_shifts = target.get("max")
         else:
-            assistant.constraints.target_shifts = None
+            # Defensiv: alter int-Wert trotz Migration, oder Helfer ohne Eintrag
+            assistant.constraints.min_shifts = target
+            assistant.constraints.max_shifts = target
 
     return MonthPlan(
         year=year,

@@ -55,8 +55,10 @@ def export_excel(plan: MonthPlan, folder: str | Path) -> str:
                     cell.value = "VOLL"
                 elif entry.shift_type == ShiftType.HALF_MORNING:
                     cell.value = "VM"
-                else:
+                elif entry.shift_type == ShiftType.HALF_AFTERNOON:
                     cell.value = "NM"
+                elif entry.shift_type == ShiftType.ON_CALL:
+                    cell.value = "RB"
 
                 # Farbe
                 try:
@@ -85,30 +87,34 @@ def export_excel(plan: MonthPlan, folder: str | Path) -> str:
     summary_ws.cell(1, 3, "VOLL")
     summary_ws.cell(1, 4, "VM")
     summary_ws.cell(1, 5, "NM")
+    summary_ws.cell(1, 6, "RB")
 
     for row, assistant in enumerate(plan.assistants, 2):
         summary_ws.cell(row, 1, assistant.name)
 
-        total = 0
         full_count = 0
         vm_count = 0
         nm_count = 0
+        rb_count = 0
 
         for entries in plan.schedule.values():
             for e in entries:
                 if e.assistant_id == assistant.id:
-                    total += 1
                     if e.shift_type == ShiftType.FULL:
                         full_count += 1
                     elif e.shift_type == ShiftType.HALF_MORNING:
                         vm_count += 1
-                    else:
+                    elif e.shift_type == ShiftType.HALF_AFTERNOON:
                         nm_count += 1
+                    elif e.shift_type == ShiftType.ON_CALL:
+                        rb_count += 1
 
-        summary_ws.cell(row, 2, total)
+        # Gewichtete Dienstzahl (VOLL=1, VM/NM=0,5); RB zaehlt separat
+        summary_ws.cell(row, 2, full_count + 0.5 * (vm_count + nm_count))
         summary_ws.cell(row, 3, full_count)
         summary_ws.cell(row, 4, vm_count)
         summary_ws.cell(row, 5, nm_count)
+        summary_ws.cell(row, 6, rb_count)
 
     # Breiten anpassen
     ws.column_dimensions["A"].width = 20
@@ -116,7 +122,7 @@ def export_excel(plan: MonthPlan, folder: str | Path) -> str:
         ws.column_dimensions[get_column_letter(col)].width = 12
 
     summary_ws.column_dimensions["A"].width = 20
-    for col in range(2, 6):
+    for col in range(2, 7):
         summary_ws.column_dimensions[get_column_letter(col)].width = 15
 
     wb.save(excel_file)
