@@ -5,7 +5,7 @@ from PySide6.QtCore import Qt, QRect, QSize
 from PySide6.QtGui import QPainter, QColor, QFont, QPen
 
 from models import ShiftType
-from scheduling.engine import is_unavailable
+from scheduling.engine import is_on_vacation, is_blocked
 from . import theme
 
 WEEKEND_COLOR = QColor(235, 235, 235)
@@ -14,13 +14,14 @@ SHIFT_LABELS = {
     ShiftType.FULL: "VOLL",
     ShiftType.HALF_MORNING: "VM",
     ShiftType.HALF_AFTERNOON: "NM",
+    ShiftType.ON_CALL: "RB",
 }
 
 
 class CellDelegate(QStyledItemDelegate):
     """Zeichnet die Planzellen direkt aus den Plandaten:
     Helferfarbe (heller + Punkt bei Zufallseintraegen), Schloss bei fixierten,
-    grau mit "U" bei Urlaub/Abwesenheit, Wochenend-Grau."""
+    grau mit "U" bei Urlaub bzw. "X" bei Block, Wochenend-Grau."""
 
     def __init__(self, plan_provider, parent=None):
         super().__init__(parent)
@@ -38,9 +39,16 @@ class CellDelegate(QStyledItemDelegate):
         assistant = next((a for a in plan.assistants if a.id == assistant_id), None)
         entries = plan.schedule.get(day, [])
         entry = next((e for e in entries if e.assistant_id == assistant_id), None)
-        unavailable = assistant is not None and is_unavailable(
+        # Urlaub hat Vorrang vor Block, falls beides gesetzt ist
+        vacation = assistant is not None and is_on_vacation(
             assistant, day, plan.year, plan.month
         )
+        blocked = (
+            not vacation
+            and assistant is not None
+            and is_blocked(assistant, day, plan.year, plan.month)
+        )
+        unavailable = vacation or blocked
         weekend = date(plan.year, plan.month, day).weekday() >= 5
 
         painter.save()
@@ -62,8 +70,10 @@ class CellDelegate(QStyledItemDelegate):
         text = ""
         if entry is not None:
             text = SHIFT_LABELS.get(entry.shift_type, "")
-        elif unavailable:
+        elif vacation:
             text = "U"
+        elif blocked:
+            text = "X"
         if text:
             font = QFont()
             font.setBold(entry is not None)

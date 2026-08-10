@@ -15,6 +15,7 @@ SHIFT_LABELS = {
     ShiftType.FULL: "VOLL",
     ShiftType.HALF_MORNING: "VM",
     ShiftType.HALF_AFTERNOON: "NM",
+    ShiftType.ON_CALL: "RB",
 }
 
 PAGE_SIZE = pagesizes.landscape(pagesizes.A4)
@@ -46,7 +47,7 @@ def _plan_table(plan: MonthPlan, first_day: int, last_day: int, day_width: float
         for day in days:
             entries = plan.schedule.get(day, [])
             matching = [e for e in entries if e.assistant_id == assistant.id]
-            row.append(SHIFT_LABELS[matching[0].shift_type] if matching else "")
+            row.append(SHIFT_LABELS.get(matching[0].shift_type, "") if matching else "")
         data.append(row)
 
     table = Table(data, colWidths=[NAME_COL_WIDTH] + [day_width] * len(list(days)))
@@ -130,9 +131,9 @@ def export_pdf(plan: MonthPlan, folder: str | Path) -> str:
     story.append(Paragraph("Zusammenfassung", styles["Heading2"]))
     story.append(Spacer(1, 0.2 * cm))
 
-    summary_data = [["Assistent", "Dienste gesamt", "VOLL", "VM", "NM"]]
+    summary_data = [["Assistent", "Dienste gesamt", "VOLL", "VM", "NM", "RB"]]
     for assistant in plan.assistants:
-        full = vm = nm = 0
+        full = vm = nm = rb = 0
         for entries in plan.schedule.values():
             for e in entries:
                 if e.assistant_id == assistant.id:
@@ -140,14 +141,17 @@ def export_pdf(plan: MonthPlan, folder: str | Path) -> str:
                         full += 1
                     elif e.shift_type == ShiftType.HALF_MORNING:
                         vm += 1
-                    else:
+                    elif e.shift_type == ShiftType.HALF_AFTERNOON:
                         nm += 1
+                    elif e.shift_type == ShiftType.ON_CALL:
+                        rb += 1
+        # Gewichtete Dienstzahl (VOLL=1, VM/NM=0,5); RB zaehlt separat
         total = full + 0.5 * (vm + nm)
         summary_data.append(
-            [assistant.name, f"{total:g}", str(full), str(vm), str(nm)]
+            [assistant.name, f"{total:g}", str(full), str(vm), str(nm), str(rb)]
         )
 
-    summary_table = Table(summary_data, colWidths=[4 * cm] * 5)
+    summary_table = Table(summary_data, colWidths=[3.5 * cm] * 6)
     summary_table.setStyle(TableStyle([
         ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
         ("FONTSIZE", (0, 0), (-1, -1), 8),

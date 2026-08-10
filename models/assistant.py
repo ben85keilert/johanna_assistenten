@@ -8,11 +8,17 @@ class AssistantConstraints:
     assistant_id: str
     unavailable_dates: list[date] = field(default_factory=list)
     vacation_ranges: list[tuple[date, date]] = field(default_factory=list)
+    # Block-Zeiten: sperren wie Urlaub Dienst UND Rufbereitschaft,
+    # sind aber eine eigene Kategorie (kein Urlaub)
+    blocked_dates: list[date] = field(default_factory=list)
+    blocked_ranges: list[tuple[date, date]] = field(default_factory=list)
     max_consecutive_days: int = 3
     # Helfer mit weiter Anreise kommen immer fuer mehrere Tage am Stueck;
     # der Generator plant sie nur in Bloecken von mindestens dieser Laenge ein
     min_block_days: int = 1
-    target_shifts: int | None = None
+    # Soll-Dienste als Spanne; None = "Auto" (gleichmaessig verteilen)
+    min_shifts: int | None = None
+    max_shifts: int | None = None
 
 
 @dataclass
@@ -24,10 +30,9 @@ class Assistant:
     active: bool = True
 
 
-def absence_days(constraints: AssistantConstraints) -> set[date]:
-    """Alle Abwesenheitstage (Einzeltage + Urlaubszeitraeume) als Tagesmenge."""
-    days = set(constraints.unavailable_dates)
-    for start, end in constraints.vacation_ranges:
+def _collect_days(singles: list[date], ranges: list[tuple[date, date]]) -> set[date]:
+    days = set(singles)
+    for start, end in ranges:
         d = start
         while d <= end:
             days.add(d)
@@ -35,10 +40,10 @@ def absence_days(constraints: AssistantConstraints) -> set[date]:
     return days
 
 
-def set_absence_days(constraints: AssistantConstraints, days: set[date]) -> None:
-    """Schreibt eine Tagesmenge normalisiert zurueck: zusammenhaengende
-    Folgen (>= 2 Tage) werden Urlaubszeitraeume, Einzeltage bleiben
-    Einzeltage. Ueberlappende/angrenzende Zeitraeume verschmelzen dadurch."""
+def _normalize_days(days: set[date]) -> tuple[list[date], list[tuple[date, date]]]:
+    """Zerlegt eine Tagesmenge normalisiert: zusammenhaengende Folgen
+    (>= 2 Tage) werden Zeitraeume, Einzeltage bleiben Einzeltage.
+    Ueberlappende/angrenzende Zeitraeume verschmelzen dadurch."""
     ordered = sorted(days)
     singles: list[date] = []
     ranges: list[tuple[date, date]] = []
@@ -52,5 +57,28 @@ def set_absence_days(constraints: AssistantConstraints, days: set[date]) -> None
         else:
             ranges.append((ordered[i], ordered[j]))
         i = j + 1
+    return singles, ranges
+
+
+def absence_days(constraints: AssistantConstraints) -> set[date]:
+    """Alle Urlaubstage (Einzeltage + Urlaubszeitraeume) als Tagesmenge."""
+    return _collect_days(constraints.unavailable_dates, constraints.vacation_ranges)
+
+
+def set_absence_days(constraints: AssistantConstraints, days: set[date]) -> None:
+    """Schreibt die Urlaubs-Tagesmenge normalisiert zurueck."""
+    singles, ranges = _normalize_days(days)
     constraints.unavailable_dates = singles
     constraints.vacation_ranges = ranges
+
+
+def blocked_days(constraints: AssistantConstraints) -> set[date]:
+    """Alle Block-Tage (Einzeltage + Zeitraeume) als Tagesmenge."""
+    return _collect_days(constraints.blocked_dates, constraints.blocked_ranges)
+
+
+def set_blocked_days(constraints: AssistantConstraints, days: set[date]) -> None:
+    """Schreibt die Block-Tagesmenge normalisiert zurueck."""
+    singles, ranges = _normalize_days(days)
+    constraints.blocked_dates = singles
+    constraints.blocked_ranges = ranges

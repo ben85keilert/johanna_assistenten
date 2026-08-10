@@ -7,7 +7,10 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QFont
 
-from models import MonthPlan, ShiftEntry, ShiftType, absence_days, set_absence_days
+from models import (
+    MonthPlan, ShiftEntry, ShiftType,
+    absence_days, set_absence_days, blocked_days, set_blocked_days,
+)
 from persistence import AppSettings
 from datetime import date
 import calendar
@@ -23,7 +26,9 @@ from scheduling.validator import validate
 STAMP_FULL = "full"
 STAMP_VM = "vm"
 STAMP_NM = "nm"
+STAMP_ONCALL = "oncall"
 STAMP_VACATION = "vacation"
+STAMP_BLOCK = "block"
 STAMP_LOCK = "lock"
 STAMP_DELETE = "delete"
 
@@ -31,12 +36,13 @@ STAMP_SHIFTS = {
     STAMP_FULL: ShiftType.FULL,
     STAMP_VM: ShiftType.HALF_MORNING,
     STAMP_NM: ShiftType.HALF_AFTERNOON,
+    STAMP_ONCALL: ShiftType.ON_CALL,
 }
 
 WEEKDAYS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
 
-# Feste Spalten vor den Tagesspalten: Soll + Belegt
-DAY_COL_OFFSET = 2
+# Feste Spalten vor den Tagesspalten: Soll Min + Soll Max + Belegt
+DAY_COL_OFFSET = 3
 
 # Hintergrund der grauen Kopf-Zeilen in der geteilten Ansicht
 SEPARATOR_BG = QColor(215, 215, 215)
@@ -54,7 +60,7 @@ class PlanTab(QWidget):
         self.settings = settings
         self.active_stamp: str | None = None
         self._assistant_by_id = {}
-        self._target_spins = {}  # assistant_id -> BigStepper
+        self._target_spins = {}  # (assistant_id, "min"|"max") -> BigStepper
         self._group1_row_offset = 0
         self.init_ui()
 
@@ -92,7 +98,9 @@ class PlanTab(QWidget):
             (STAMP_FULL, "Tagesdienst"),
             (STAMP_VM, "VM"),
             (STAMP_NM, "NM"),
+            (STAMP_ONCALL, "Rufbereitschaft"),
             (STAMP_VACATION, "Urlaub"),
+            (STAMP_BLOCK, "Block"),
             (STAMP_LOCK, "Fixieren"),
             (STAMP_DELETE, "Loeschen"),
         ]:
@@ -274,20 +282,31 @@ class PlanTab(QWidget):
                     continue
                 changed = True
 
-            elif stamp == STAMP_VACATION:
+            elif stamp in (STAMP_VACATION, STAMP_BLOCK):
                 d = date(self.plan.year, self.plan.month, day)
-                days = absence_days(assistant.constraints)
+                if stamp == STAMP_VACATION:
+                    get_days, set_days = absence_days, set_absence_days
+                    other_get, other_set = blocked_days, set_blocked_days
+                else:
+                    get_days, set_days = blocked_days, set_blocked_days
+                    other_get, other_set = absence_days, set_absence_days
+                days = get_days(assistant.constraints)
                 if d in days:
                     days.discard(d)
                 else:
-                    if entry is not None:
+                    other_days = other_get(assistant.constraints)
+                    if entry is not None or d in other_days:
                         if not allow_overwrite:
                             continue
-                        self._remove_entry(assistant_id, day)
+                        if entry is not None:
+                            self._remove_entry(assistant_id, day)
+                        if d in other_days:
+                            other_days.discard(d)
+                            other_set(assistant.constraints, other_days)
                     days.add(d)
                 # Zusammenhaengende Tage werden automatisch zu
-                # Urlaubszeitraeumen (Team-Tab) zusammengefasst
-                set_absence_days(assistant.constraints, days)
+                # Zeitraeumen (Team-Tab) zusammengefasst
+                set_days(assistant.constraints, days)
                 changed = True
 
             elif stamp == STAMP_LOCK:
@@ -298,7 +317,7 @@ class PlanTab(QWidget):
         if changed:
             self.refresh_display()
             self.plan_modified.emit()
-            if stamp == STAMP_VACATION:
+            if stamp in (STAMP_VACATION, STAMP_BLOCK):
                 self.constraints_changed.emit()
 
     # --- Plan/Anzeige ---
@@ -324,26 +343,49 @@ class PlanTab(QWidget):
             item.setBackground(background)
         return item
 
-    def _make_target_stepper(self, assistant) -> BigStepper:
-        target = assistant.constraints.target_shifts
+    def _make_target_stepper(self, assistant, field: str) -> BigStepper:
+        if field == "min":
+            target = assistant.constraints.min_shifts
+            label = "Min. Dienste"
+            tooltip = "Mindestens so viele Dienste diesen Monat (Auto = keine Untergrenze)"
+        else:
+            target = assistant.constraints.max_shifts
+            label = "Max. Dienste"
+            tooltip = "Hoechstens so viele Dienste diesen Monat (Auto = gleichmaessig verteilen)"
         stepper = BigStepper(
-            label=f"{assistant.name}: Soll-Dienste",
+            label=f"{assistant.name}: {label}",
             value=-1 if target is None else target,
             minimum=-1,
             maximum=31,
             special_min_text="Auto",
         )
-        stepper.setToolTip("Soll-Dienste diesen Monat (Auto = gleichmaessig verteilen)")
+        stepper.setToolTip(tooltip)
         stepper.value_changed.connect(
-            lambda value, aid=assistant.id: self.on_target_changed(aid, value)
+            lambda value, aid=assistant.id, f=field: self.on_target_changed(aid, f, value)
         )
         return stepper
 
-    def on_target_changed(self, assistant_id: str, value: int):
+    def on_target_changed(self, assistant_id: str, field: str, value: int):
         assistant = self._assistant_by_id.get(assistant_id)
         if not assistant:
             return
-        assistant.constraints.target_shifts = None if value < 0 else value
+        c = assistant.constraints
+        new_value = None if value < 0 else value
+        if field == "min":
+            c.min_shifts = new_value
+            # Max mitziehen; "Auto" (None) clampt nie
+            if new_value is not None and c.max_shifts is not None and c.max_shifts < new_value:
+                c.max_shifts = new_value
+                other = self._target_spins.get((assistant_id, "max"))
+                if other:
+                    other.set_value(new_value)
+        else:
+            c.max_shifts = new_value
+            if new_value is not None and c.min_shifts is not None and c.min_shifts > new_value:
+                c.min_shifts = new_value
+                other = self._target_spins.get((assistant_id, "min"))
+                if other:
+                    other.set_value(new_value)
         self.update_summary()
         self.plan_modified.emit()
         self.constraints_changed.emit()
@@ -384,7 +426,7 @@ class PlanTab(QWidget):
 
         # Spaltenkoepfe: feste Spalten; Tages-Labels nur in der breiten
         # Ansicht (geteilt uebernehmen das die grauen Kopf-Zeilen)
-        header_labels = ["Soll", "Belegt\nV|VM|NM"]
+        header_labels = ["Soll\nMin", "Soll\nMax", "Belegt\nV|VM|NM|RB"]
         for day in range(1, half + 1):
             header_labels.append("" if split else self._day_header(day))
         self.table.setHorizontalHeaderLabels(header_labels)
@@ -404,12 +446,13 @@ class PlanTab(QWidget):
         # Erste Haelfte (bzw. ganzer Monat)
         for i, assistant in enumerate(assistants):
             row = off + i
-            stepper = self._make_target_stepper(assistant)
-            self._target_spins[assistant.id] = stepper
-            self.table.setCellWidget(row, 0, stepper)
+            for col, field in ((0, "min"), (1, "max")):
+                stepper = self._make_target_stepper(assistant, field)
+                self._target_spins[(assistant.id, field)] = stepper
+                self.table.setCellWidget(row, col, stepper)
             counts_item = self._make_inert_item()
             counts_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-            self.table.setItem(row, 1, counts_item)
+            self.table.setItem(row, 2, counts_item)
             for col in range(DAY_COL_OFFSET, DAY_COL_OFFSET + half):
                 day = col - DAY_COL_OFFSET + 1
                 self.table.setItem(row, col, self._make_day_item(assistant.id, day))
@@ -421,8 +464,8 @@ class PlanTab(QWidget):
             # Zweite Haelfte
             for i, assistant in enumerate(assistants):
                 row = off + n + 1 + i
-                self.table.setItem(row, 0, self._make_inert_item())
-                self.table.setItem(row, 1, self._make_inert_item())
+                for col in range(DAY_COL_OFFSET):
+                    self.table.setItem(row, col, self._make_inert_item())
                 for col in range(DAY_COL_OFFSET, DAY_COL_OFFSET + half):
                     day = col - DAY_COL_OFFSET + 1 + half
                     if day <= days_in_month:
@@ -432,13 +475,15 @@ class PlanTab(QWidget):
 
         header = self.table.horizontalHeader()
         header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
-        self.table.setColumnWidth(0, 2 * theme.STEPPER_BUTTON_W + 64)
-        header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        stepper_width = 2 * theme.STEPPER_BUTTON_W + 64
+        for col in (0, 1):
+            header.setSectionResizeMode(col, QHeaderView.ResizeMode.Fixed)
+            self.table.setColumnWidth(col, stepper_width)
+        header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
         self.refresh_display()
 
-    def _shift_counts(self, assistant_id: str) -> tuple[int, int, int]:
-        full = vm = nm = 0
+    def _shift_counts(self, assistant_id: str) -> tuple[int, int, int, int]:
+        full = vm = nm = rb = 0
         for entries in self.plan.schedule.values():
             for e in entries:
                 if e.assistant_id != assistant_id:
@@ -447,9 +492,11 @@ class PlanTab(QWidget):
                     full += 1
                 elif e.shift_type == ShiftType.HALF_MORNING:
                     vm += 1
-                else:
+                elif e.shift_type == ShiftType.HALF_AFTERNOON:
                     nm += 1
-        return full, vm, nm
+                elif e.shift_type == ShiftType.ON_CALL:
+                    rb += 1
+        return full, vm, nm, rb
 
     def refresh_display(self):
         if not self.plan:
@@ -457,10 +504,10 @@ class PlanTab(QWidget):
         # Belegt-Spalte (nur obere Zeilengruppe)
         off = getattr(self, "_group1_row_offset", 0)
         for i, assistant in enumerate(self.plan.assistants):
-            item = self.table.item(off + i, 1)
+            item = self.table.item(off + i, 2)
             if item:
-                full, vm, nm = self._shift_counts(assistant.id)
-                item.setText(f"{full} | {vm} | {nm}")
+                full, vm, nm, rb = self._shift_counts(assistant.id)
+                item.setText(f"{full} | {vm} | {nm} | {rb}")
         # Der Delegate zeichnet die Tageszellen direkt aus den Plandaten
         self.table.viewport().update()
         self.update_summary()
@@ -471,11 +518,19 @@ class PlanTab(QWidget):
 
         summary_parts = []
         for assistant in self.plan.assistants:
-            full, vm, nm = self._shift_counts(assistant.id)
-            target = assistant.constraints.target_shifts
-            target_text = f" Soll {target}" if target is not None else ""
-            summary_parts.append(f"{assistant.name} ({full}|{vm}|{nm}){target_text}")
-        legend = "Legende: Name (VOLL|VM|NM)"
+            full, vm, nm, rb = self._shift_counts(assistant.id)
+            min_shifts = assistant.constraints.min_shifts
+            max_shifts = assistant.constraints.max_shifts
+            if min_shifts is not None and max_shifts is not None:
+                target_text = f" Soll {min_shifts}-{max_shifts}"
+            elif min_shifts is not None:
+                target_text = f" Soll min {min_shifts}"
+            elif max_shifts is not None:
+                target_text = f" Soll max {max_shifts}"
+            else:
+                target_text = ""
+            summary_parts.append(f"{assistant.name} ({full}|{vm}|{nm}|{rb}){target_text}")
+        legend = "Legende: Name (VOLL|VM|NM|RB)"
         self.summary_label.setText("   ".join(summary_parts) + "      " + legend)
 
         warnings = validate(self.plan)
@@ -545,10 +600,13 @@ class PlanTab(QWidget):
         shift_menu.addAction("Tagesdienst (VOLL)", lambda: self.apply_stamp(STAMP_FULL, cells))
         shift_menu.addAction("VM (Vormittag)", lambda: self.apply_stamp(STAMP_VM, cells))
         shift_menu.addAction("NM (Nachmittag)", lambda: self.apply_stamp(STAMP_NM, cells))
+        shift_menu.addAction("Rufbereitschaft (RB)", lambda: self.apply_stamp(STAMP_ONCALL, cells))
         menu.addAction("Loeschen" + suffix, lambda: self.apply_stamp(STAMP_DELETE, cells))
         menu.addSeparator()
         menu.addAction("Urlaub setzen/entfernen" + suffix,
                        lambda: self.apply_stamp(STAMP_VACATION, cells))
+        menu.addAction("Block setzen/entfernen" + suffix,
+                       lambda: self.apply_stamp(STAMP_BLOCK, cells))
         menu.addSeparator()
         menu.addAction("Fixieren" + suffix, lambda: self.set_locked(cells, True))
         menu.addAction("Fixierung loesen" + suffix, lambda: self.set_locked(cells, False))
