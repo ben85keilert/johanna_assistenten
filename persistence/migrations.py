@@ -7,8 +7,8 @@ Dateien nach einem Programm-Update weiter funktionieren.
 """
 from __future__ import annotations
 
-CURRENT_TEAM_VERSION = 3
-CURRENT_PLAN_VERSION = 3
+CURRENT_TEAM_VERSION = 4
+CURRENT_PLAN_VERSION = 4
 CURRENT_SETTINGS_VERSION = 3
 
 
@@ -35,6 +35,14 @@ def migrate_team(data) -> dict:
                 "min_block_days": 1,
             })
         version = 3
+
+    if version < 4:
+        # v3 -> v4: Block-Zeiten (zweite Abwesenheitsart neben Urlaub)
+        for assistant in data.get("assistants", []):
+            constraints = assistant.get("constraints", {})
+            constraints.setdefault("blocked_dates", [])
+            constraints.setdefault("blocked_ranges", [])
+        version = 4
 
     data["version"] = CURRENT_TEAM_VERSION
     return data
@@ -69,6 +77,25 @@ def migrate_plan(data: dict) -> dict:
         if old_constraints:
             data["legacy_constraints"] = old_constraints
         version = 3
+
+    if version < 4:
+        # v3 -> v4: Soll-Dienste werden eine Min/Max-Spanne; ein alter fester
+        # Wert wird zu min == max, "Auto" (null) zu beiden null
+        data["targets"] = {
+            aid: {"min": t, "max": t} if not isinstance(t, dict) else t
+            for aid, t in data.get("targets", {}).items()
+        }
+        # Vollplan-Dateien (Datei > Speichern) tragen Constraints samt Ziel
+        # direkt bei den Assistenten
+        for assistant in data.get("assistants", []):
+            constraints = assistant.get("constraints", {})
+            if "target_shifts" in constraints:
+                t = constraints.pop("target_shifts")
+                constraints.setdefault("min_shifts", t)
+                constraints.setdefault("max_shifts", t)
+            constraints.setdefault("blocked_dates", [])
+            constraints.setdefault("blocked_ranges", [])
+        version = 4
 
     data["version"] = CURRENT_PLAN_VERSION
     return data
