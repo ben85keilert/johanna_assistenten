@@ -7,9 +7,11 @@ wenn sich das Konzept ändert, wird zuerst dieses Dokument angepasst.
 ## Zweck
 
 Johanna ist eine Person, die **rund um die Uhr von jeweils einer Person assistiert**
-wird. Die Assistenz übernimmt ein kleiner Helferkreis (bis zu 10 Personen). Das
-Programm erstellt für jeden Monat einen Dienstplan, der die Tage **fair** auf das Team
-verteilt und dabei die persönlichen Einschränkungen jedes Helfers berücksichtigt.
+wird. Die Assistenz übernimmt ein kleiner Helferkreis (bis zu 10 Personen). Zusätzlich
+zum Tagesdienst gibt es an jedem Tag eine **Rufbereitschaft** durch eine andere Person
+aus dem Team. Das Programm erstellt für jeden Monat einen Dienstplan, der die Tage
+**fair** auf das Team verteilt und dabei die persönlichen Einschränkungen jedes
+Helfers berücksichtigt.
 
 Das Programm läuft zunächst als **Desktop-Anwendung** (Windows-Build für den realen
 Einsatz, Entwicklung unter Linux). Geplant wird von einer Person am Rechner.
@@ -21,22 +23,38 @@ Einsatz, Entwicklung unter Linux). Geplant wird von einer Person am Rechner.
 | VOLL   | Tagesdienst (Regelfall) | deckt den ganzen Tag ab |
 | VM     | nur Vormittag (Ausnahme) | halber Tag |
 | NM     | nur Nachmittag (Ausnahme) | halber Tag |
+| RB     | Rufbereitschaft (immer ganztägig, kein halber Tag) | eigener Bedarf: 1 Person pro Tag |
 
 Ein Tag gilt als **abgedeckt**, wenn entweder eine Person VOLL übernimmt **oder**
-zwei Personen sich den Tag mit VM + NM teilen. Halbe Dienste zählen für die
-Verteilung als 0,5 Dienste.
+zwei Personen sich den Tag mit VM + NM teilen — **und** zusätzlich eine weitere
+Person die Rufbereitschaft hat. Pro Person und Tag gibt es **entweder Dienst oder
+Rufbereitschaft, nie beides**; die Rufbereitschaft übernimmt also nie die Person,
+die an dem Tag Dienst hat. Halbe Dienste zählen für die Verteilung als 0,5 Dienste.
+Rufbereitschaften zählen in einer **eigenen Zählung** und nie zu den Soll-Diensten.
 
 ## Fairness-Regeln (Einschränkungen)
 
 Jeder Helfer hat eigene Vorgaben:
 
-- **Ziel-Dienste pro Monat**: feste Anzahl oder „Auto" (gleichmäßige Verteilung).
-- **Max. Tage am Stück** (1–7): mehr aufeinanderfolgende Diensttage sind nicht erlaubt.
+- **Min./Max. Dienste pro Monat**: eine Spanne (z. B. min 3, max 6), beide Werte
+  optional („Auto"). Das Minimum ist ein Verteilungsziel, das Maximum eine harte
+  Grenze — der Generator überschreitet es nie; im Zweifel bleibt ein Tag unbesetzt
+  und es erscheint eine Warnung. Min ≤ Max wird automatisch eingehalten.
+- **Rufbereitschaft ≈ Dienste**: jeder Helfer bekommt im Monat etwa so viele
+  Rufbereitschaften wie (gewichtete) Dienste.
+- **Max. Tage am Stück** (1–7): mehr aufeinanderfolgende Diensttage sind nicht
+  erlaubt. Gilt für Dienst **und** Rufbereitschaft, aber **je Art getrennt
+  gezählt**: 3 Tage Dienst direkt gefolgt von 3 Tagen Rufbereitschaft sind zwei
+  3er-Folgen, keine 6er-Folge.
 - **Min. Tage am Stück** (1–7): Helfer mit weiter Anreise kommen immer für mehrere
   Tage hintereinander (z. B. 2er- oder 3er-Blöcke). Der Generator plant sie nur in
-  zusammenhängenden Blöcken ein. Muss ≤ „Max. Tage am Stück" sein.
-- **Nicht verfügbare Einzeltage** und **Urlaubszeiträume**: an diesen Tagen wird die
-  Person nie eingeplant.
+  zusammenhängenden Blöcken ein — auch bei der Rufbereitschaft. Muss ≤ „Max. Tage
+  am Stück" sein.
+- **Urlaub** (nicht verfügbare Einzeltage und Urlaubszeiträume) und **Block**
+  (reguläre Sperrzeiten, z. B. andere Verpflichtungen): an diesen Tagen wird die
+  Person nie eingeplant — weder für Dienst noch für Rufbereitschaft. Beide Arten
+  wirken gleich; der Unterschied ist rein die Kategorie (echter Urlaub bleibt von
+  sonstigen geblockten Zeiten unterscheidbar).
 
 Weitere Bedingungen (z. B. Wochenend-Fairness) folgen später und werden hier ergänzt.
 
@@ -64,10 +82,12 @@ Zwei Tabs:
    - **Zwei Ansichten** (umschaltbar, wird gemerkt): *Breit* (der ganze Monat in
      einer Zeile) oder *Zweigeteilt* (zweite Monatshälfte unter der ersten — man
      scrollt vertikal statt horizontal).
-   - Neben dem Namen stehen pro Helfer die **Soll-Dienste** (Minus/Plus-Buttons,
-     „Auto" = gleichmäßig verteilen) und die **belegten Dienste** als Tupel
-     `VOLL | VM | NM`.
-   - **Stempel-Buttons**: Tagesdienst | VM | NM | Urlaub | Fixieren | Löschen.
+   - Neben dem Namen stehen pro Helfer die **Soll-Dienste als Min/Max-Spanne**
+     (zwei Spalten mit Minus/Plus-Buttons, „Auto" = keine Grenze bzw. gleichmäßig
+     verteilen; Min ≤ Max hält sich automatisch konsistent) und die **belegten
+     Dienste** als Tupel `VOLL | VM | NM | RB`.
+   - **Stempel-Buttons**: Tagesdienst | VM | NM | Rufbereitschaft | Urlaub |
+     Block | Fixieren | Löschen.
      Ein aktiver Stempel wird per Klick auf eine Zelle angewendet; erneuter Klick
      auf denselben Stempeltyp entfernt ihn wieder. **Gestempelte Dienste sind
      automatisch fixiert** (Fixpunkte, mit Schloss). Einträge eines *anderen*
@@ -76,23 +96,28 @@ Zwei Tabs:
      **Löschen** entfernt Stempel und Zufalls-Vorschläge per Klick.
    - **Mehrfachauswahl**: mit Strg/Shift lassen sich mehrere Zellen (auch verstreut)
      markieren; das Rechtsklick-Menü wirkt dann auf alle markierten Zellen.
-   - **Urlaub** im Raster: zusammenhängend gestempelte Tage werden automatisch
-     zu Urlaubszeiträumen zusammengefasst und erscheinen in der Urlaubsübersicht
-     des Team-Tabs; Einzeltage bleiben Einzeltage. Wird ein Tag mitten aus einem
-     Zeitraum wieder entfernt, teilt sich der Zeitraum entsprechend.
-   - Unter dem Raster: Zusammenfassung pro Helfer als Tupel `Name (VOLL|VM|NM)`
-     mit Legende sowie Warnhinweise (unbesetzte/halbe Tage, Zielabweichungen).
+   - **Urlaub und Block** im Raster: zusammenhängend gestempelte Tage werden
+     automatisch zu Zeiträumen zusammengefasst und erscheinen in der
+     Abwesenheitsübersicht des Team-Tabs; Einzeltage bleiben Einzeltage. Wird ein
+     Tag mitten aus einem Zeitraum wieder entfernt, teilt sich der Zeitraum
+     entsprechend. Im Raster erscheint Urlaub als graues **„U"**, Block als
+     graues **„X"**.
+   - Unter dem Raster: Zusammenfassung pro Helfer als Tupel `Name (VOLL|VM|NM|RB)`
+     mit Legende sowie Warnhinweise (unbesetzte/halbe Tage, Tage ohne
+     Rufbereitschaft, Zielabweichungen, Abweichungen Rufbereitschaft/Dienste).
 2. **Team-Tab**: Links die Helferliste (anlegen/entfernen, Name und Farbe;
-   **Ziel-Dienste, Max. Folge und Min. Block direkt in der Tabelle** mit
-   Minus/Plus-Buttons, Min. Block und Max. Folge halten sich automatisch
-   konsistent). Einzelne Abwesenheitstage stempelt man direkt im Planraster
-   (Urlaub-Stempel). Rechts daneben die **Urlaubsübersicht**: alle Abwesenheiten aller Helfer
-   chronologisch sortiert — Zeiträume **und Einzeltage**, monatsübergreifend.
-   Hinzufügen, **Bearbeiten** (Button oder Doppelklick) und Entfernen über
-   Dialoge mit Kalender-Datumsfeldern; überlappende oder angrenzende Zeiträume
+   **Min./Max. Dienste, Max. Folge und Min. Block direkt in der Tabelle** mit
+   Minus/Plus-Buttons; Min./Max. Dienste sowie Min. Block und Max. Folge halten
+   sich jeweils automatisch konsistent). Einzelne Abwesenheitstage stempelt man
+   direkt im Planraster (Urlaub- oder Block-Stempel). Rechts daneben die
+   **Abwesenheitsübersicht**: alle Abwesenheiten aller Helfer chronologisch
+   sortiert — Zeiträume **und Einzeltage**, Urlaub und Block (Block-Einträge sind
+   mit `[Block]` gekennzeichnet), monatsübergreifend. Hinzufügen, **Bearbeiten**
+   (Button oder Doppelklick) und Entfernen über Dialoge mit Kalender-Datumsfeldern
+   und Art-Auswahl (Urlaub/Block); überlappende oder angrenzende Zeiträume
    verschmelzen automatisch. In der Tab-Zeile (solange der Team-Tab aktiv ist):
    **Filter** nach Person und Monat sowie „Vergangene anzeigen" — abgelaufene
-   Urlaube sind standardmäßig ausgeblendet.
+   Abwesenheiten sind standardmäßig ausgeblendet.
 
 ### Generier-Zyklus: Fixieren und Neuwürfeln
 
@@ -113,6 +138,13 @@ Zwei Tabs:
 Endet ein manuell gesetzter Block mit einem halben Tag (z. B. Tag 3 nur VM), vergibt
 der Generator die fehlende Tageshälfte (NM) an eine andere Person.
 
+Nach der Dienstvergabe verteilt der Generator die **Rufbereitschaft**: erst Blöcke
+für Helfer mit weiter Anreise, dann die restlichen Tage — Ziel ist, dass jeder etwa
+so viele Rufbereitschaften wie Dienste bekommt, nie am eigenen Diensttag. Ein hartes
+„Max. Dienste" wird nie überschritten; wenn dadurch (oder in kleinen Teams durch die
+Folgen-Grenzen) Tage nicht besetzbar sind, bleiben sie offen und erscheinen als
+Warnung unter dem Raster — das ist gewollt, nicht kaputt.
+
 ## Datenhaltung
 
 Alle Daten liegen als **JSON** im Ordner `data/` neben dem Programm. Das Programm
@@ -122,18 +154,20 @@ her (zuletzt geöffneter Monat, Fenstergröße).
 ### `data/team.json` — das Team (monatsübergreifend)
 
 Enthält neben Name/Farbe auch die **personenbezogenen Einschränkungen**: Urlaube
-und Einzeltage (datumsbasiert, gelten in jedem berührten Monat — auch
-monatsübergreifende Urlaube), Max. Folge und Min. Block:
+und Einzeltage sowie Block-Zeiten (datumsbasiert, gelten in jedem berührten Monat —
+auch monatsübergreifend), Max. Folge und Min. Block:
 
 ```json
 {
-  "version": 3,
+  "version": 4,
   "assistants": [
     { "id": "f1f04d0e", "name": "Martha", "color": "#3498DB", "active": true,
       "constraints": {
         "assistant_id": "f1f04d0e",
         "unavailable_dates": ["2026-08-15"],
         "vacation_ranges": [["2026-08-28", "2026-09-05"]],
+        "blocked_dates": [],
+        "blocked_ranges": [["2026-08-20", "2026-08-22"]],
         "max_consecutive_days": 3,
         "min_block_days": 1 } }
   ]
@@ -143,18 +177,20 @@ monatsübergreifende Urlaube), Max. Folge und Min. Block:
 ### `data/plans/plan_JJJJ_MM.json` — ein Plan pro Monat
 
 Enthält den Dienstplan des Monats und als einzige monatsbezogene Vorgabe die
-**Soll-Dienste** (`targets`) je Helfer:
+**Soll-Dienste als Min/Max-Spanne** (`targets`) je Helfer:
 
 ```json
 {
-  "version": 3,
+  "version": 4,
   "year": 2026,
   "month": 8,
   "schedule": {
     "1": [ { "assistant_id": "f1f04d0e", "shift_type": "FULL",
-             "locked": true, "generated": false } ]
+             "locked": true, "generated": false },
+           { "assistant_id": "a27b3c91", "shift_type": "ON_CALL",
+             "locked": false, "generated": true } ]
   },
-  "targets": { "f1f04d0e": null },
+  "targets": { "f1f04d0e": { "min": 3, "max": 6 }, "a27b3c91": { "min": null, "max": null } },
   "seed": 42,
   "created_at": "…", "modified_at": "…"
 }
@@ -162,6 +198,10 @@ Enthält den Dienstplan des Monats und als einzige monatsbezogene Vorgabe die
 
 - `locked`: fixiert — übersteht das Neuwürfeln.
 - `generated`: wurde vom Zufallsgenerator vergeben (farblich markiert), nicht von Hand.
+- `shift_type: "ON_CALL"`: Rufbereitschaft (im Raster als „RB").
+
+In den CSV-/Excel-/PDF-Exporten hat die Zusammenfassung eine eigene **RB**-Spalte;
+„Dienste gesamt" ist die gewichtete Dienstzahl (VOLL = 1, VM/NM = 0,5, ohne RB).
 
 ### `data/settings.json` — App-Zustand
 
