@@ -10,11 +10,17 @@ Abdeckung: Ein Tag braucht einen Tagesdienst (1x VOLL oder VM + NM) und
 zusaetzlich eine Rufbereitschaft (RB, ganztaegig) durch eine andere Person.
 Halbe Dienste zaehlen 0,5 fuer die Zielverteilung. Pro Person und Tag gibt
 es entweder Dienst oder Rufbereitschaft, nie beides.
-Jeder Helfer soll im Monat etwa so viele Rufbereitschaften wie (gewichtete)
-Dienste haben. Folgen (Max. Folge, Min. Block) gelten fuer Dienst und RB
-gleichermassen, werden aber je Art getrennt gezaehlt.
+Jeder Helfer bekommt im Monat genauso viele Rufbereitschaften wie
+(gewichtete) Dienste - Ziel ist Gleichstand, nicht nur Annaeherung.
+Folgen (Max. Folge, Min. Block) gelten fuer Dienst und RB gleichermassen,
+werden aber je Art getrennt gezaehlt.
 Helfer mit min_block_days > 1 werden nur in zusammenhaengenden Bloecken
-eingeplant (weite Anreise).
+eingeplant (weite Anreise). Mit oncall_attach ("before"/"after") haengt der
+Generator die Rufbereitschaft als Block direkt vor bzw. nach den Dienstblock,
+damit die Person am Stueck vor Ort ist.
+min_gap_days ist der Mindestabstand in freien Tagen zwischen zwei
+Einsatzbloecken derselben Person (Dienst und RB zusammen gezaehlt) - eine
+harte Regel, die der Generator nie unterschreitet.
 """
 from __future__ import annotations
 import random
@@ -93,6 +99,33 @@ def exceeds_consecutive(plan: MonthPlan, assistant_id: str, day: int,
         3,
     )
     return _run_length_if_assigned(plan, assistant_id, day, day, kinds) > max_days
+
+
+def _violates_min_gap(plan: MonthPlan, assistant, first_day: int, last_day: int,
+                      days_in_month: int) -> bool:
+    """True, wenn ein Einsatz an first_day..last_day den Mindestabstand
+    dieser Person unterschreiten wuerde. Der Abstand zaehlt freie Tage
+    zwischen zwei getrennten Einsatzbloecken (alle Dienstarten zusammen);
+    direkt angrenzende Tage verlaengern den Block und sind erlaubt."""
+    min_gap = assistant.constraints.min_gap_days
+    if min_gap <= 0:
+        return False
+    # Kombinierten Einsatzblock bestimmen: angrenzende belegte Tage zaehlen mit
+    left = first_day
+    while left > 1 and _works_on(plan, assistant.id, left - 1):
+        left -= 1
+    right = last_day
+    while right < days_in_month and _works_on(plan, assistant.id, right + 1):
+        right += 1
+    # Innerhalb des Mindestabstands vor/nach dem Block darf kein weiterer
+    # Einsatz liegen (left-1 bzw. right+1 sind nach dem Erweitern frei)
+    for day in range(max(1, left - min_gap), left - 1):
+        if _works_on(plan, assistant.id, day):
+            return True
+    for day in range(right + 2, min(days_in_month, right + min_gap) + 1):
+        if _works_on(plan, assistant.id, day):
+            return True
+    return False
 
 
 def _day_needs(plan: MonthPlan, day: int) -> ShiftType | None:
@@ -178,6 +211,8 @@ def generate(plan: MonthPlan, seed: int | None = None) -> MonthPlan:
                 continue
             if exceeds_consecutive(plan, a.id, day):
                 continue
+            if _violates_min_gap(plan, a, day, day, days_in_month):
+                continue
             if assigned[a.id] + needed_weight <= duty_cap(a):
                 result.append(a)
         return result
@@ -190,10 +225,13 @@ def generate(plan: MonthPlan, seed: int | None = None) -> MonthPlan:
     single_assistants = [a for a in active if a.constraints.min_block_days <= 1]
 
     # 3. Blockvergabe: Helfer mit weiter Anreise bekommen zusammenhaengende
-    #    VOLL-Bloecke von min_block_days Laenge auf noch komplett freien Tagen
+    #    VOLL-Bloecke von min_block_days Laenge auf noch komplett freien
+    #    Tagen. Mit oncall_attach wird der gleich lange RB-Block direkt
+    #    davor bzw. danach mit vergeben (Anwesenheit am Stueck)
     rng.shuffle(block_assistants)
     for a in block_assistants:
         block_len = a.constraints.min_block_days
+        attach = a.constraints.oncall_attach
         while assigned[a.id] + block_len <= duty_cap(a):
             starts = []
             for start in range(1, days_in_month - block_len + 2):
@@ -208,6 +246,27 @@ def generate(plan: MonthPlan, seed: int | None = None) -> MonthPlan:
                 run = _run_length_if_assigned(plan, a.id, start, start + block_len - 1)
                 if run > a.constraints.max_consecutive_days:
                     continue
+                span_first, span_last = start, start + block_len - 1
+                if attach in ("before", "after"):
+                    rb_start = start - block_len if attach == "before" else start + block_len
+                    rb_days = range(rb_start, rb_start + block_len)
+                    if rb_days[0] < 1 or rb_days[-1] > days_in_month:
+                        continue
+                    if not all(_needs_oncall(plan, d) for d in rb_days):
+                        continue
+                    if any(_works_on(plan, a.id, d) for d in rb_days):
+                        continue
+                    if any(is_unavailable(a, d, year, month) for d in rb_days):
+                        continue
+                    rb_run = _run_length_if_assigned(
+                        plan, a.id, rb_days[0], rb_days[-1], ON_CALL_KINDS
+                    )
+                    if rb_run > a.constraints.max_consecutive_days:
+                        continue
+                    span_first = min(span_first, rb_days[0])
+                    span_last = max(span_last, rb_days[-1])
+                if _violates_min_gap(plan, a, span_first, span_last, days_in_month):
+                    continue
                 starts.append(start)
             if not starts:
                 break
@@ -215,6 +274,35 @@ def generate(plan: MonthPlan, seed: int | None = None) -> MonthPlan:
             for d in range(start, start + block_len):
                 _add_entry(plan, d, a.id, ShiftType.FULL)
             assigned[a.id] += block_len
+            if attach in ("before", "after"):
+                rb_start = start - block_len if attach == "before" else start + block_len
+                for d in range(rb_start, rb_start + block_len):
+                    _add_entry(plan, d, a.id, ShiftType.ON_CALL)
+                oncall_assigned[a.id] += block_len
+
+    def try_attach_oncall(a, day: int) -> None:
+        """Haengt fuer Helfer mit oncall_attach die Rufbereitschaft direkt
+        an einen einzeln vergebenen Diensttag an (best effort)."""
+        attach = a.constraints.oncall_attach
+        if attach not in ("before", "after"):
+            return
+        rb_day = day - 1 if attach == "before" else day + 1
+        if not 1 <= rb_day <= days_in_month:
+            return
+        if oncall_assigned[a.id] + 1 > assigned[a.id] + 0.5:
+            return
+        if not _needs_oncall(plan, rb_day):
+            return
+        if _works_on(plan, a.id, rb_day):
+            return
+        if is_unavailable(a, rb_day, year, month):
+            return
+        if exceeds_consecutive(plan, a.id, rb_day, ON_CALL_KINDS):
+            return
+        if _violates_min_gap(plan, a, rb_day, rb_day, days_in_month):
+            return
+        _add_entry(plan, rb_day, a.id, ShiftType.ON_CALL)
+        oncall_assigned[a.id] += 1
 
     # 4. Restliche Tage einzeln fuellen (VOLL fuer leere Tage,
     #    fehlende Haelfte fuer halb abgedeckte Tage)
@@ -231,13 +319,15 @@ def generate(plan: MonthPlan, seed: int | None = None) -> MonthPlan:
         if not available:
             available = candidates(day, weight, block_assistants)
         if not available:
-            # Toleranz lockern: Auto-Zielgrenze ignorieren; ein explizites
-            # Maximum bleibt eine harte Grenze (Tag bleibt sonst offen)
+            # Toleranz lockern: Auto-Zielgrenze ignorieren; explizites
+            # Maximum und Mindestabstand bleiben harte Grenzen
+            # (Tag bleibt sonst offen)
             available = [
                 a for a in active
                 if not _works_on(plan, a.id, day)
                 and not is_unavailable(a, day, year, month)
                 and not exceeds_consecutive(plan, a.id, day)
+                and not _violates_min_gap(plan, a, day, day, days_in_month)
                 and (a.constraints.max_shifts is None
                      or assigned[a.id] + weight <= a.constraints.max_shifts)
             ]
@@ -247,9 +337,11 @@ def generate(plan: MonthPlan, seed: int | None = None) -> MonthPlan:
         chosen = pick(available)
         _add_entry(plan, day, chosen.id, needed)
         assigned[chosen.id] += weight
+        try_attach_oncall(chosen, day)
 
-    # 5. Rufbereitschaft: jeder Tag eine Person, Ziel je Helfer = eigene
-    #    (gewichtete) Dienstzahl; nie am eigenen Diensttag
+    # 5. Rufbereitschaft: jeder Tag eine Person, Ziel je Helfer = genau die
+    #    eigene (gewichtete) Dienstzahl (Gleichstand); nie am eigenen
+    #    Diensttag. Angehaengte RB-Bloecke (oncall_attach) sind schon vergeben
     oncall_target = {a.id: assigned[a.id] for a in active}
 
     def oncall_candidates(day: int, pool, respect_target: bool = True) -> list:
@@ -261,7 +353,11 @@ def generate(plan: MonthPlan, seed: int | None = None) -> MonthPlan:
                 continue
             if exceeds_consecutive(plan, a.id, day, ON_CALL_KINDS):
                 continue
-            if respect_target and oncall_assigned[a.id] + 1 > oncall_target[a.id] + tolerance:
+            if _violates_min_gap(plan, a, day, day, days_in_month):
+                continue
+            # Gleichstand RB = Dienste: +0,5 erlaubt das Aufrunden bei
+            # halben Diensten, mehr nicht
+            if respect_target and oncall_assigned[a.id] + 1 > oncall_target[a.id] + 0.5:
                 continue
             result.append(a)
         return result
@@ -277,7 +373,7 @@ def generate(plan: MonthPlan, seed: int | None = None) -> MonthPlan:
     rng.shuffle(block_assistants)
     for a in block_assistants:
         block_len = a.constraints.min_block_days
-        while oncall_assigned[a.id] + block_len <= oncall_target[a.id] + tolerance:
+        while oncall_assigned[a.id] + block_len <= oncall_target[a.id] + 0.5:
             starts = []
             for start in range(1, days_in_month - block_len + 2):
                 days = range(start, start + block_len)
@@ -291,6 +387,9 @@ def generate(plan: MonthPlan, seed: int | None = None) -> MonthPlan:
                     plan, a.id, start, start + block_len - 1, ON_CALL_KINDS
                 )
                 if run > a.constraints.max_consecutive_days:
+                    continue
+                if _violates_min_gap(plan, a, start, start + block_len - 1,
+                                     days_in_month):
                     continue
                 starts.append(start)
             if not starts:
@@ -307,7 +406,8 @@ def generate(plan: MonthPlan, seed: int | None = None) -> MonthPlan:
         if not available:
             available = oncall_candidates(day, block_assistants)
         if not available:
-            # Toleranz lockern: RB-Zielgrenze ignorieren
+            # Zielgrenze lockern, damit kein Tag ohne RB bleibt; der
+            # Gleichstand wird anschliessend in Schritt 6 repariert
             available = oncall_candidates(day, active, respect_target=False)
         if not available:
             continue
@@ -315,5 +415,42 @@ def generate(plan: MonthPlan, seed: int | None = None) -> MonthPlan:
         chosen = oncall_pick(available)
         _add_entry(plan, day, chosen.id, ShiftType.ON_CALL)
         oncall_assigned[chosen.id] += 1
+
+    # 6. Ausgleichsrunde fuer den Gleichstand RB = Dienste: Helfer ueber
+    #    ihrem RB-Ziel geben generierte, nicht fixierte RB-Tage an Helfer
+    #    unter dem Ziel ab, sofern alle Regeln es zulassen
+    def _oncall_entry(day: int, assistant_id: str) -> ShiftEntry | None:
+        return next(
+            (e for e in plan.schedule.get(day, [])
+             if e.assistant_id == assistant_id and e.shift_type == ShiftType.ON_CALL),
+            None,
+        )
+
+    moved = True
+    while moved:
+        moved = False
+        givers = [a for a in active if oncall_assigned[a.id] - oncall_target[a.id] > 0.5]
+        for giver in givers:
+            for day in range(1, days_in_month + 1):
+                entry = _oncall_entry(day, giver.id)
+                if entry is None or not entry.generated or entry.locked:
+                    continue
+                # Probeweise entfernen, damit Folge-/Abstandspruefungen
+                # fuer den Nehmer den echten Zustand sehen
+                plan.schedule[day].remove(entry)
+                takers = oncall_candidates(day, [
+                    a for a in active
+                    if oncall_target[a.id] - oncall_assigned[a.id] > 0.5
+                ])
+                if takers:
+                    taker = oncall_pick(takers)
+                    _add_entry(plan, day, taker.id, ShiftType.ON_CALL)
+                    oncall_assigned[taker.id] += 1
+                    oncall_assigned[giver.id] -= 1
+                    moved = True
+                    break
+                plan.schedule[day].append(entry)
+            if moved:
+                break
 
     return plan

@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QTableWidget,
-    QTableWidgetItem, QMessageBox, QHeaderView,
+    QTableWidgetItem, QMessageBox, QHeaderView, QTabWidget,
     QGroupBox, QListWidget, QListWidgetItem, QDialog, QComboBox,
     QDateEdit, QLabel
 )
@@ -9,8 +9,10 @@ from PySide6.QtGui import QColor, QPixmap
 
 from models import (
     Assistant, AssistantConstraints, MonthPlan,
+    AssistantSettings, SettingsProfile, apply_settings,
     absence_days, set_absence_days, blocked_days, set_blocked_days,
 )
+from persistence import default_profiles
 from datetime import date, timedelta
 import calendar
 import uuid
@@ -19,14 +21,23 @@ from . import theme
 from .widgets.color_button import ColorButton
 from .widgets.big_stepper import BigStepper
 
+# Auswahl fuer "RB anhaengen": Rufbereitschafts-Block direkt vor/nach dem
+# Dienstblock (fuer Helfer mit weiter Anreise, die am Stueck bleiben wollen)
+ATTACH_OPTIONS = [("—", "none"), ("Vorher", "before"), ("Nachher", "after")]
+
 
 class TeamTab(QWidget):
+    # Helferliste/Abwesenheiten oder Plan-Einstellungen geaendert
     assistants_changed = Signal()
+    # Eine Vorlage wurde geaendert (wird beim Speichern mitgesichert)
+    profiles_changed = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.plan: MonthPlan | None = None
-        self._steppers = {}  # (assistant_id, field) -> BigStepper
+        self.profiles: list[SettingsProfile] = default_profiles()
+        self._steppers = {}  # (profile_idx, assistant_id, field) -> BigStepper
+        self._refreshing = False
         self.init_ui()
 
     def _init_filter_bar(self):
@@ -59,7 +70,7 @@ class TeamTab(QWidget):
         self._init_filter_bar()
         layout = QHBoxLayout()
 
-        # Linke Seite: Helferliste mit Buttons
+        # Linke Seite: Helfer-Buttons + zwei Einstellungs-Vorlagen als Tabs
         left_layout = QVBoxLayout()
         button_layout = QHBoxLayout()
         self.add_btn = QPushButton("+ Helfer hinzufuegen")
@@ -73,13 +84,43 @@ class TeamTab(QWidget):
         button_layout.addStretch()
         left_layout.addLayout(button_layout)
 
-        # Tabelle: Werte direkt in der Zeile aenderbar (grosse +/- Buttons)
-        self.table = QTableWidget()
-        self.table.setColumnCount(6)
-        self.table.setHorizontalHeaderLabels(
-            ["Farbe", "Name", "Min. Dienste", "Max. Dienste", "Max. Folge", "Min. Block"]
-        )
-        left_layout.addWidget(self.table)
+        # Zwei Vorlagen: Einstellungen getrennt vorbereiten und per Button
+        # in den Dienstplan des aktuellen Monats uebernehmen
+        self.profile_tabs = QTabWidget()
+        self._tables: list[QTableWidget] = []
+        self._apply_buttons: list[QPushButton] = []
+        for idx in range(2):
+            page = QWidget()
+            page_layout = QVBoxLayout()
+
+            table = QTableWidget()
+            table.setColumnCount(8)
+            table.setHorizontalHeaderLabels([
+                "Farbe", "Name", "Min. Dienste", "Max. Dienste",
+                "Max. Folge", "Min. Block", "Abstand", "RB anhaengen",
+            ])
+            table.itemChanged.connect(
+                lambda item, i=idx: self.on_name_edited(i, item)
+            )
+            page_layout.addWidget(table)
+
+            apply_layout = QHBoxLayout()
+            apply_btn = QPushButton("In Dienstplan uebernehmen")
+            apply_btn.setToolTip(
+                "Uebertraegt die Einstellungen dieser Vorlage in den "
+                "Dienstplan des aktuell geoeffneten Monats."
+            )
+            apply_btn.clicked.connect(lambda _, i=idx: self.apply_profile(i))
+            apply_layout.addWidget(apply_btn)
+            apply_layout.addStretch()
+            page_layout.addLayout(apply_layout)
+
+            page.setLayout(page_layout)
+            self.profile_tabs.addTab(page, f"Vorlage {idx + 1}")
+            self._tables.append(table)
+            self._apply_buttons.append(apply_btn)
+
+        left_layout.addWidget(self.profile_tabs)
         layout.addLayout(left_layout, stretch=3)
 
         # Rechte Seite: Abwesenheitsuebersicht, chronologisch sortiert
@@ -112,15 +153,24 @@ class TeamTab(QWidget):
         self.refresh_table()
         self.refresh_vacations()
 
+    def set_profiles(self, profiles: list[SettingsProfile]):
+        self.profiles = profiles
+        self.refresh_table()
+
     def refresh_all(self):
         """Von aussen aufrufen, wenn Einschraenkungen anderswo geaendert wurden."""
         self.refresh_table()
         self.refresh_vacations()
 
-    # --- Team-Tabelle ---
+    # --- Vorlagen-Tabellen ---
 
-    def _make_stepper(self, assistant, field: str, label: str, value: int,
-                      minimum: int, maximum: int,
+    def _profile_settings(self, profile_idx: int, assistant_id: str) -> AssistantSettings:
+        return self.profiles[profile_idx].settings.setdefault(
+            assistant_id, AssistantSettings()
+        )
+
+    def _make_stepper(self, profile_idx: int, assistant, field: str, label: str,
+                      value: int, minimum: int, maximum: int,
                       special_min_text: str | None = None) -> BigStepper:
         stepper = BigStepper(
             label=f"{assistant.name}: {label}",
@@ -128,107 +178,189 @@ class TeamTab(QWidget):
             special_min_text=special_min_text,
         )
         stepper.value_changed.connect(
-            lambda v, aid=assistant.id, f=field: self.on_stepper_changed(aid, f, v)
+            lambda v, p=profile_idx, aid=assistant.id, f=field:
+            self.on_stepper_changed(p, aid, f, v)
         )
-        self._steppers[(assistant.id, field)] = stepper
+        self._steppers[(profile_idx, assistant.id, field)] = stepper
         return stepper
 
-    def on_stepper_changed(self, assistant_id: str, field: str, value: int):
-        assistant = next((a for a in self.plan.assistants if a.id == assistant_id), None)
-        if not assistant:
-            return
-        c = assistant.constraints
+    def on_stepper_changed(self, profile_idx: int, assistant_id: str,
+                           field: str, value: int):
+        s = self._profile_settings(profile_idx, assistant_id)
 
         if field == "min_target":
-            c.min_shifts = None if value < 0 else value
+            s.min_shifts = None if value < 0 else value
             # Max. Dienste mitziehen; "Auto" (None) clampt nie
-            if (c.min_shifts is not None and c.max_shifts is not None
-                    and c.max_shifts < c.min_shifts):
-                c.max_shifts = c.min_shifts
-                other = self._steppers.get((assistant_id, "max_target"))
+            if (s.min_shifts is not None and s.max_shifts is not None
+                    and s.max_shifts < s.min_shifts):
+                s.max_shifts = s.min_shifts
+                other = self._steppers.get((profile_idx, assistant_id, "max_target"))
                 if other:
-                    other.set_value(c.min_shifts)
+                    other.set_value(s.min_shifts)
         elif field == "max_target":
-            c.max_shifts = None if value < 0 else value
-            if (c.max_shifts is not None and c.min_shifts is not None
-                    and c.min_shifts > c.max_shifts):
-                c.min_shifts = c.max_shifts
-                other = self._steppers.get((assistant_id, "min_target"))
+            s.max_shifts = None if value < 0 else value
+            if (s.max_shifts is not None and s.min_shifts is not None
+                    and s.min_shifts > s.max_shifts):
+                s.min_shifts = s.max_shifts
+                other = self._steppers.get((profile_idx, assistant_id, "min_target"))
                 if other:
-                    other.set_value(c.max_shifts)
+                    other.set_value(s.max_shifts)
         elif field == "max":
-            c.max_consecutive_days = value
+            s.max_consecutive_days = value
             # Min. Block darf nicht groesser sein als Max. Folge
-            if c.min_block_days > value:
-                c.min_block_days = value
-                other = self._steppers.get((assistant_id, "min"))
+            if s.min_block_days > value:
+                s.min_block_days = value
+                other = self._steppers.get((profile_idx, assistant_id, "min"))
                 if other:
                     other.set_value(value)
         elif field == "min":
-            c.min_block_days = value
-            if c.max_consecutive_days < value:
-                c.max_consecutive_days = value
-                other = self._steppers.get((assistant_id, "max"))
+            s.min_block_days = value
+            if s.max_consecutive_days < value:
+                s.max_consecutive_days = value
+                other = self._steppers.get((profile_idx, assistant_id, "max"))
                 if other:
                     other.set_value(value)
+        elif field == "gap":
+            s.min_gap_days = value
 
+        self.profiles_changed.emit()
+
+    def on_attach_changed(self, profile_idx: int, assistant_id: str, value: str):
+        s = self._profile_settings(profile_idx, assistant_id)
+        s.oncall_attach = value
+        self.profiles_changed.emit()
+
+    def on_name_edited(self, profile_idx: int, item: QTableWidgetItem):
+        """Namensaenderung in einer der beiden Tabellen sofort uebernehmen
+        und in der anderen Tabelle spiegeln."""
+        if self._refreshing or item.column() != 1 or not self.plan:
+            return
+        row = item.row()
+        if row >= len(self.plan.assistants):
+            return
+        assistant = self.plan.assistants[row]
+        if assistant.name == item.text():
+            return
+        assistant.name = item.text()
+        other = self._tables[1 - profile_idx].item(row, 1)
+        if other is not None:
+            self._refreshing = True
+            other.setText(assistant.name)
+            self._refreshing = False
+        self.refresh_vacations()
         self.assistants_changed.emit()
 
     def refresh_table(self):
         if not self.plan:
             return
 
+        self._refreshing = True
         self._steppers = {}
-        self.table.setRowCount(len(self.plan.assistants))
-        self.table.verticalHeader().setDefaultSectionSize(theme.ROW_HEIGHT)
 
-        for i, assistant in enumerate(self.plan.assistants):
-            c = assistant.constraints
+        if self.plan:
+            month_text = f"{self.plan.year}-{self.plan.month:02d}"
+            for btn in self._apply_buttons:
+                btn.setText(f"In Dienstplan {month_text} uebernehmen")
 
-            color_btn = ColorButton(assistant.color)
-            color_btn.color_changed.connect(
-                lambda new_color, idx=i: self.update_assistant_color(idx, new_color)
+        for profile_idx, table in enumerate(self._tables):
+            self.profile_tabs.setTabText(
+                profile_idx, self.profiles[profile_idx].name
             )
-            self.table.setCellWidget(i, 0, color_btn)
+            table.setRowCount(len(self.plan.assistants))
+            table.verticalHeader().setDefaultSectionSize(theme.ROW_HEIGHT)
 
-            name_item = QTableWidgetItem(assistant.name)
-            self.table.setItem(i, 1, name_item)
+            for i, assistant in enumerate(self.plan.assistants):
+                s = self._profile_settings(profile_idx, assistant.id)
 
-            self.table.setCellWidget(i, 2, self._make_stepper(
-                assistant, "min_target", "Min. Dienste",
-                -1 if c.min_shifts is None else c.min_shifts, -1, 31,
-                special_min_text="Auto",
-            ))
-            self.table.setCellWidget(i, 3, self._make_stepper(
-                assistant, "max_target", "Max. Dienste",
-                -1 if c.max_shifts is None else c.max_shifts, -1, 31,
-                special_min_text="Auto",
-            ))
-            self.table.setCellWidget(i, 4, self._make_stepper(
-                assistant, "max", "Max. Folge", c.max_consecutive_days, 1, 7,
-            ))
-            self.table.setCellWidget(i, 5, self._make_stepper(
-                assistant, "min", "Min. Block", c.min_block_days, 1, 7,
-            ))
+                color_btn = ColorButton(assistant.color)
+                color_btn.color_changed.connect(
+                    lambda new_color, aid=assistant.id:
+                    self.update_assistant_color(aid, new_color)
+                )
+                table.setCellWidget(i, 0, color_btn)
 
-        # Kompakte Spalten: schmale Namensspalte, Rest nach Inhalt;
-        # rechts darf Rand bleiben
-        header = self.table.horizontalHeader()
-        header.setStretchLastSection(False)
-        header.setSectionResizeMode(QHeaderView.ResizeMode.Fixed)
-        stepper_width = 2 * theme.STEPPER_BUTTON_W + 64
-        self.table.setColumnWidth(0, 70)
-        self.table.setColumnWidth(1, 150)
-        for col in (2, 3, 4, 5):
-            self.table.setColumnWidth(col, stepper_width)
+                table.setItem(i, 1, QTableWidgetItem(assistant.name))
 
+                table.setCellWidget(i, 2, self._make_stepper(
+                    profile_idx, assistant, "min_target", "Min. Dienste",
+                    -1 if s.min_shifts is None else s.min_shifts, -1, 31,
+                    special_min_text="Auto",
+                ))
+                table.setCellWidget(i, 3, self._make_stepper(
+                    profile_idx, assistant, "max_target", "Max. Dienste",
+                    -1 if s.max_shifts is None else s.max_shifts, -1, 31,
+                    special_min_text="Auto",
+                ))
+                table.setCellWidget(i, 4, self._make_stepper(
+                    profile_idx, assistant, "max", "Max. Folge",
+                    s.max_consecutive_days, 1, 7,
+                ))
+                table.setCellWidget(i, 5, self._make_stepper(
+                    profile_idx, assistant, "min", "Min. Block",
+                    s.min_block_days, 1, 7,
+                ))
+                gap_stepper = self._make_stepper(
+                    profile_idx, assistant, "gap", "Abstand",
+                    s.min_gap_days, 0, 14, special_min_text="Aus",
+                )
+                gap_stepper.setToolTip(
+                    "Mindestabstand in freien Tagen zwischen zwei "
+                    "Einsatzbloecken dieser Person (Dienst und "
+                    "Rufbereitschaft zusammen). Harte Regel."
+                )
+                table.setCellWidget(i, 6, gap_stepper)
+
+                attach_combo = QComboBox()
+                for label, value in ATTACH_OPTIONS:
+                    attach_combo.addItem(label, value)
+                index = attach_combo.findData(s.oncall_attach)
+                attach_combo.setCurrentIndex(index if index >= 0 else 0)
+                attach_combo.setToolTip(
+                    "Rufbereitschaft als Block direkt vor bzw. nach dem "
+                    "Dienstblock einplanen - fuer Helfer mit weiter "
+                    "Anreise, die am Stueck vor Ort sein wollen."
+                )
+                attach_combo.currentIndexChanged.connect(
+                    lambda _, c=attach_combo, p=profile_idx, aid=assistant.id:
+                    self.on_attach_changed(p, aid, c.currentData())
+                )
+                table.setCellWidget(i, 7, attach_combo)
+
+            # Kompakte Spalten: schmale Namensspalte, Rest nach Inhalt;
+            # rechts darf Rand bleiben
+            header = table.horizontalHeader()
+            header.setStretchLastSection(False)
+            header.setSectionResizeMode(QHeaderView.ResizeMode.Fixed)
+            stepper_width = 2 * theme.STEPPER_BUTTON_W + 64
+            table.setColumnWidth(0, 70)
+            table.setColumnWidth(1, 150)
+            for col in (2, 3, 4, 5, 6):
+                table.setColumnWidth(col, stepper_width)
+            table.setColumnWidth(7, 140)
+
+        self._refreshing = False
         self.add_btn.setEnabled(len(self.plan.assistants) < 10)
+
+    def apply_profile(self, profile_idx: int):
+        """Uebertraegt die Vorlage in den Dienstplan des aktuellen Monats."""
+        if not self.plan:
+            return
+        profile = self.profiles[profile_idx]
+        for assistant in self.plan.assistants:
+            apply_settings(
+                assistant.constraints,
+                profile.settings.setdefault(assistant.id, AssistantSettings()),
+            )
+        self.assistants_changed.emit()
+        QMessageBox.information(
+            self, "Uebernommen",
+            f"Die Einstellungen aus '{profile.name}' gelten jetzt fuer den "
+            f"Dienstplan {self.plan.year}-{self.plan.month:02d}.",
+        )
 
     def add_assistant(self):
         if not self.plan or len(self.plan.assistants) >= 10:
             return
-
-        self._save_names_from_table()
 
         new_id = str(uuid.uuid4())[:8]
         constraints = AssistantConstraints(assistant_id=new_id)
@@ -246,31 +378,33 @@ class TeamTab(QWidget):
         if not self.plan:
             return
 
-        self._save_names_from_table()
-
-        row = self.table.currentRow()
+        table = self._tables[self.profile_tabs.currentIndex()]
+        row = table.currentRow()
         if row < 0:
             QMessageBox.warning(self, "Warnung", "Bitte waehlen Sie einen Helfer aus.")
             return
 
+        removed = self.plan.assistants[row]
         del self.plan.assistants[row]
+        for profile in self.profiles:
+            profile.settings.pop(removed.id, None)
         self.refresh_table()
         self.refresh_vacations()
         self.assistants_changed.emit()
 
-    def update_assistant_color(self, row: int, color: str):
-        if self.plan and 0 <= row < len(self.plan.assistants):
-            self.plan.assistants[row].color = color
-            self.refresh_vacations()
-            self.assistants_changed.emit()
-
-    def _save_names_from_table(self):
-        if not self.plan:
+    def update_assistant_color(self, assistant_id: str, color: str):
+        assistant = self._assistant_by_id(assistant_id)
+        if assistant is None:
             return
-        for i in range(self.table.rowCount()):
-            name_item = self.table.item(i, 1)
-            if name_item and i < len(self.plan.assistants):
-                self.plan.assistants[i].name = name_item.text()
+        assistant.color = color
+        # Farbknopf der jeweils anderen Tabelle mitziehen
+        row = self.plan.assistants.index(assistant)
+        for table in self._tables:
+            widget = table.cellWidget(row, 0)
+            if isinstance(widget, ColorButton) and widget.current_color != color:
+                widget.set_color(color)
+        self.refresh_vacations()
+        self.assistants_changed.emit()
 
     # --- Abwesenheiten (Urlaub + Block) ---
 
