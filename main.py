@@ -8,7 +8,7 @@ from PySide6.QtGui import QAction
 from models import MonthPlan
 from persistence import (
     save, load, save_team, load_team, save_plan, load_plan,
-    load_settings, save_settings,
+    load_profiles, load_settings, save_settings,
 )
 from ui.main_window import MainWindow
 from ui.team_tab import TeamTab
@@ -23,8 +23,11 @@ class JohannaApp:
         self.settings = load_settings()
         self.window = MainWindow()
         self.plan = self._auto_load()
+        # Die zwei Einstellungs-Vorlagen (Team-Tab) gelten monatsuebergreifend
+        self.profiles = load_profiles()
 
         self.team_tab = TeamTab()
+        self.team_tab.set_profiles(self.profiles)
         self.plan_tab = PlanTab(self.settings)
 
         self.window.set_plan_tab(self.plan_tab)
@@ -35,6 +38,7 @@ class JohannaApp:
         # Signale verdrahten: Aenderungen sofort in beiden Tabs sichtbar
         self.team_tab.assistants_changed.connect(self.plan_tab.rebuild_grid)
         self.team_tab.assistants_changed.connect(self.window.mark_modified)
+        self.team_tab.profiles_changed.connect(self.window.mark_modified)
         self.plan_tab.plan_modified.connect(self.window.mark_modified)
         self.plan_tab.constraints_changed.connect(self.team_tab.refresh_all)
         self.plan_tab.month_change_requested.connect(self.change_month)
@@ -145,11 +149,10 @@ class JohannaApp:
                 QMessageBox.critical(self.window, "Fehler", f"Laden fehlgeschlagen:\n{e}")
 
     def _save_current(self, update_status: bool = True):
-        self.team_tab._save_names_from_table()
         self.plan.modified_at = datetime.now().isoformat()
         if not self.plan.created_at:
             self.plan.created_at = datetime.now().isoformat()
-        save_team(self.plan.assistants)
+        save_team(self.plan.assistants, self.profiles)
         save_plan(self.plan)
         self.window.mark_saved()
         if update_status:
