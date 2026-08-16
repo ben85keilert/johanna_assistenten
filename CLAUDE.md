@@ -37,15 +37,18 @@ BESCHREIBUNG.md  # Authoritative German description of purpose & behavior
 - **Assistant**: id, name, color, active, constraints
 - **ShiftEntry**: assistant_id, shift_type, `locked` (fixed — survives re-roll), `generated` (True = placed by the random generator, shown lighter with a dot; False = set by hand, always survives)
 - **ShiftType**: FULL (Tagesdienst, the regular case), HALF_MORNING (VM), HALF_AFTERNOON (NM). A day is covered by one FULL or by VM + NM (two people). Half shifts count 0.5 toward targets (`shift_weight()`).
-- **AssistantConstraints**: unavailable_dates, vacation_ranges, max_consecutive_days (1–7), `min_block_days` (1–7; >1 = assistant travels far and is only scheduled in consecutive blocks), target_shifts (None = auto/fair share)
+- **AssistantConstraints**: unavailable_dates, vacation_ranges, blocked_dates/blocked_ranges, max_consecutive_days (1–7), `min_block_days` (1–7; >1 = assistant travels far and is only scheduled in consecutive blocks), `min_gap_days` (0 = off; hard minimum of free days between two of the person's deployment blocks, duty + on-call combined), `oncall_attach` ("none"/"before"/"after": on-call block is placed directly adjacent to the duty block), min_shifts/max_shifts (None = auto/fair share)
+- **SettingsProfile / AssistantSettings** (`models/profile.py`): two cross-month settings templates ("Vorlage 1"/"Vorlage 2") holding per-assistant scheduling settings; applied to the current month's plan via a button in the TeamTab. The month plan file stores its own settings snapshot.
 
 ### Scheduling Engine (`scheduling/engine.py`)
 `generate(plan, seed)` implements the **fix-and-re-roll cycle**:
 1. Removes all entries with `generated=True and locked=False` (re-roll)
-2. Places consecutive FULL blocks for assistants with `min_block_days > 1`
+2. Places consecutive FULL blocks for assistants with `min_block_days > 1`; with `oncall_attach` the equally long ON_CALL block is placed directly before/after in the same step
 3. Fills remaining days greedily (least-loaded first, seeded RNG): FULL for empty days, the missing half (VM/NM) for half-covered days — assigned to a *different* person
+4. Distributes on-call (ON_CALL, one person per day, never on the person's own duty day) so each assistant gets **exactly as many on-call days as (weighted) duty shifts** — equality is required, ±0.5 only for half-shift rounding; a final rebalancing pass moves surplus generated on-call entries to assistants below their target
+5. `min_gap_days` is a hard constraint everywhere (including relaxation fallbacks): the generator never places an entry that leaves fewer free days between two of a person's deployment blocks
 
-Manual and locked entries always stay and count toward targets. `validator.py` returns warnings (uncovered/half-covered days, target deviations, block-length violations) shown live under the plan grid.
+Manual and locked entries always stay and count toward targets. `validator.py` returns warnings (uncovered/half-covered days, days without on-call, target deviations, on-call/duty inequality, block-length and min-gap violations) shown live under the plan grid.
 
 ### UI Layer (`ui/`)
 
@@ -55,15 +58,15 @@ Manual and locked entries always stay and count toward targets. `validator.py` r
 - **BigStepper** (`ui/widgets/big_stepper.py`): standard value-entry widget replacing QSpinBox (autorepeat, optional "Auto" text at minimum, `BigStepper.activate_hook` reports the active field to the ControlBar). Use it for any new numeric input.
 - **PlanTab**: calendar grid (row = assistant, column = day; two switchable views — wide, or split with the second half below). Editing via **stamp buttons** (Tagesdienst | VM | NM | Urlaub | Fixieren | Loeschen): active stamp + cell click sets (shift stamps create entries with `locked=True` — stamped = fixed point), same-type click removes; entries of a *different* type are only replaced when the "Ueberschreiben" checkbox (persisted `allow_overwrite`, default off) is enabled. "Loeschen" removes any entry. Multi-select (Ctrl/Shift, `ExtendedSelection`) + right-click menu applies to all selected cells. The "Urlaub" stamp toggles a day in the assistant's absence set via `absence_days`/`set_absence_days` (`models/assistant.py`) — consecutive days normalize into `vacation_ranges`, single days into `unavailable_dates`. Takes the shared `AppSettings` in its constructor; emits `plan_modified`, `constraints_changed`, and `month_change_requested`.
 - **CellDelegate**: paints cells entirely from plan data via a `plan_provider` callable (assistant color, lighter + dot = generated, lock glyph = fixed, gray "U" = unavailable/vacation, weekend shading). Do not rely on `QTableWidgetItem` text/background — items only carry `(assistant_id, day)` in UserRole.
-- **TeamTab**: roster table (left) with inline `BigStepper`s for target/max-consecutive/min-block (min/max kept mutually consistent), and the chronological vacation list (right; ranges *and* single days, add/edit/remove dialogs, filters in the tab-row corner bar). Single absence days are stamped in the plan grid — there is no constraints dialog anymore. Cross-tab sync: `TeamTab.assistants_changed` → `PlanTab.rebuild_grid`; `PlanTab.constraints_changed` → `TeamTab.refresh_all` (wired in `main.py`).
+- **TeamTab**: left side is a two-tab widget ("Vorlage 1"/"Vorlage 2"), one settings table per template with inline `BigStepper`s for min/max shifts, max-consecutive, min-block (pairs kept mutually consistent), min-gap ("Abstand") and an "RB anhaengen" combo. Template edits do **not** touch the plan; the "In Dienstplan … uebernehmen" button copies the template into the current month's constraints (`apply_profile`). Name/color edits apply immediately and are mirrored between both tables. Right side: the chronological vacation list (ranges *and* single days, add/edit/remove dialogs, filters in the tab-row corner bar). Single absence days are stamped in the plan grid — there is no constraints dialog anymore. Cross-tab sync: `TeamTab.assistants_changed` → `PlanTab.rebuild_grid`; `TeamTab.profiles_changed` → `mark_modified`; `PlanTab.constraints_changed` → `TeamTab.refresh_all` (wired in `main.py`).
 
 Month switching goes through `JohannaApp.change_month`: saves the current month, then loads the target month (never clears silently).
 
 ### Persistence (`persistence/`)
 Three JSON files under `data/` (next to the executable when frozen — see `_base_dir()`):
-- `team.json` — team roster (cross-month)
-- `plans/plan_YYYY_MM.json` — per-month schedule + per-assistant constraints
-- `settings.json` — app state: last opened month, window geometry, confirm-overwrite flag, seed
+- `team.json` — team roster + cross-month constraints (absences, scheduling defaults) + the two settings profiles ("Vorlagen")
+- `plans/plan_YYYY_MM.json` — per-month schedule + per-assistant settings snapshot (`settings`: min/max shifts, max-consecutive, min-block, min-gap, oncall_attach)
+- `settings.json` — app state: last opened month, window geometry, allow-overwrite flag, seed
 
 **Format versioning & migration** (`migrations.py`): every file carries a `version`. Loaders migrate old files stepwise to the current version. **If you change a file format: bump the `CURRENT_*_VERSION`, add a migration step, and tolerate missing fields with defaults.** Old data must keep working after every release — this is a hard requirement.
 
@@ -78,7 +81,7 @@ CSVExporter (flat tables), ExcelExporter (openpyxl, assistant colors), PDFExport
 2. **Greedy algorithm**: simple and predictable; intentionally not an optimal solver.
 3. **Seeded RNG** for reproducible schedules.
 4. **Dataclasses** for all models; explicit dict (de)serialization helpers in `json_store.py`.
-5. **Constraints live per assistant** and are stored per month in the plan file (team.json holds only roster data).
+5. **Constraints live per assistant**; absences are cross-month in team.json, scheduling settings are snapshotted per month in the plan file (and prepared/applied via the two team-tab templates).
 6. **Data confidentiality**: repo `data/` contains dummy data only (deliberately versioned as examples). Real personal data must never be committed.
 
 ## Common Tasks

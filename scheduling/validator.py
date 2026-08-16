@@ -77,15 +77,42 @@ def validate(plan: MonthPlan) -> list[Warning]:
                 Warning(f"{assistant.name}: nur {assigned:g} Dienste (min. {min_shifts})", "info")
             )
 
-        # Rufbereitschaft soll etwa der (gewichteten) Dienstzahl entsprechen
-        if (assigned > 0 or oncall > 0) and abs(oncall - assigned) > 1:
+        # Rufbereitschaft muss der (gewichteten) Dienstzahl entsprechen;
+        # bei halben Diensten (x,5) darf auf- oder abgerundet werden
+        if (assigned > 0 or oncall > 0) and abs(oncall - assigned) > 0.5:
             warnings.append(
                 Warning(
                     f"{assistant.name}: {oncall} Rufbereitschaften bei {assigned:g} "
-                    f"Diensten (sollte etwa gleich sein)",
-                    "info",
+                    f"Diensten (muss gleich sein)",
+                    "warning",
                 )
             )
+
+        # Mindestabstand: freie Tage zwischen zwei Einsatzbloecken
+        # (Dienst und Rufbereitschaft zusammen gezaehlt)
+        min_gap = assistant.constraints.min_gap_days
+        if min_gap > 0:
+            runs = []
+            day = 1
+            while day <= days_in_month:
+                if not _works_on(plan, assistant.id, day):
+                    day += 1
+                    continue
+                start = day
+                while day <= days_in_month and _works_on(plan, assistant.id, day):
+                    day += 1
+                runs.append((start, day - 1))
+            for (_, end1), (start2, _) in zip(runs, runs[1:]):
+                gap = start2 - end1 - 1
+                if gap < min_gap:
+                    warnings.append(
+                        Warning(
+                            f"{assistant.name}: nur {gap} freie(r) Tag(e) zwischen "
+                            f"den Einsaetzen bis zum {end1}. und ab dem {start2}. "
+                            f"(mind. {min_gap})",
+                            "warning",
+                        )
+                    )
 
         # Folgen pruefen (zu lang / zu kurz fuer Anreise-Helfer) -
         # Dienst und Rufbereitschaft getrennt je Art

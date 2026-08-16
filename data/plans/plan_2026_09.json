@@ -1,16 +1,496 @@
 {
-  "version": 3,
+  "version": 5,
   "year": 2026,
   "month": 9,
-  "schedule": {},
-  "targets": {
-    "f1f04d0e": null,
-    "4a0921a3": null,
-    "312442c2": null,
-    "4874d6d5": null,
-    "b0c044de": null
+  "schedule": {
+    "21": [
+      {
+        "assistant_id": "8cdf0de4",
+        "shift_type": "FULL",
+        "locked": false,
+        "generated": true
+      },
+      {
+        "assistant_id": "38ffc3ce",
+        "shift_type": "ON_CALL",
+        "locked": false,
+        "generated": true
+      }
+    ],
+    "22": [
+      {
+        "assistant_id": "8cdf0de4",
+        "shift_type": "FULL",
+        "locked": false,
+        "generated": true
+      },
+      {
+        "assistant_id": "d579723b",
+        "shift_type": "ON_CALL",
+        "locked": false,
+        "generated": true
+      }
+    ],
+    "23": [
+      {
+        "assistant_id": "8cdf0de4",
+        "shift_type": "FULL",
+        "locked": false,
+        "generated": true
+      },
+      {
+        "assistant_id": "38ffc3ce",
+        "shift_type": "ON_CALL",
+        "locked": false,
+        "generated": true
+      }
+    ],
+    "19": [
+      {
+        "assistant_id": "d579723b",
+        "shift_type": "FULL",
+        "locked": false,
+        "generated": true
+      },
+      {
+        "assistant_id": "f8eeb583",
+        "shift_type": "ON_CALL",
+        "locked": false,
+        "generated": true
+      }
+    ],
+    "17": [
+      {
+        "assistant_id": "f8eeb583",
+        "shift_type": "FULL",
+        "locked": false,
+        "generated": true
+      },
+      {
+        "assistant_id": "f6164e36",
+        "shift_type": "ON_CALL",
+        "locked": false,
+        "generated": true
+      }
+    ],
+    "11": [
+      {
+        "assistant_id": "27416f21",
+        "shift_type": "FULL",
+        "locked": false,
+        "generated": true
+      },
+      {
+        "assistant_id": "f8eeb583",
+        "shift_type": "ON_CALL",
+        "locked": false,
+        "generated": true
+      }
+    ],
+    "25": [
+      {
+        "assistant_id": "54fe5cd0",
+        "shift_type": "FULL",
+        "locked": false,
+        "generated": true
+      },
+      {
+        "assistant_id": "27416f21",
+        "shift_type": "ON_CALL",
+        "locked": false,
+        "generated": true
+      }
+    ],
+    "24": [
+      {
+        "assistant_id": "f6164e36",
+        "shift_type": "FULL",
+        "locked": false,
+        "generated": true
+      },
+      {
+        "assistant_id": "27416f21",
+        "shift_type": "ON_CALL",
+        "locked": false,
+        "generated": true
+      }
+    ],
+    "7": [
+      {
+        "assistant_id": "628d6c61",
+        "shift_type": "FULL",
+        "locked": false,
+        "generated": true
+      },
+      {
+        "assistant_id": "54fe5cd0",
+        "shift_type": "ON_CALL",
+        "locked": false,
+        "generated": true
+      }
+    ],
+    "6": [
+      {
+        "assistant_id": "38ffc3ce",
+        "shift_type": "FULL",
+        "locked": false,
+        "generated": true
+      },
+      {
+        "assistant_id": "8cdf0de4",
+        "shift_type": "ON_CALL",
+        "locked": false,
+        "generated": true
+      }
+    ],
+    "12": [
+      {
+        "assistant_id": "f8eeb583",
+        "shift_type": "FULL",
+        "locked": false,
+        "generated": true
+      },
+      {
+        "assistant_id": "54fe5cd0",
+        "shift_type": "ON_CALL",
+        "locked": false,
+        "generated": true
+      }
+    ],
+    "15": [
+      {
+        "assistant_id": "d579723b",
+        "shift_type": "FULL",
+        "locked": false,
+        "generated": true
+      },
+      {
+        "assistant_id": "54fe5cd0",
+        "shift_type": "ON_CALL",
+        "locked": false,
+        "generated": true
+      }
+    ],
+    "10": [
+      {
+        "assistant_id": "27416f21",
+        "shift_type": "FULL",
+        "locked": false,
+        "generated": true
+      },
+      {
+        "assistant_id": "628d6c61",
+        "shift_type": "ON_CALL",
+        "locked": false,
+        "generated": true
+      }
+    ],
+    "28": [
+      {
+        "assistant_id": "38ffc3ce",
+        "shift_type": "FULL",
+        "locked": false,
+        "generated": true
+      },
+      {
+        "assistant_id": "f8eeb583",
+        "shift_type": "ON_CALL",
+        "locked": false,
+        "generated": true
+      }
+    ],
+    "13": [
+      {
+        "assistant_id": "54fe5cd0",
+        "shift_type": "FULL",
+        "locked": false,
+        "generated": true
+      },
+      {
+        "assistant_id": "d579723b",
+        "shift_type": "ON_CALL",
+        "locked": false,
+        "generated": true
+      }
+    ],
+    "20": [
+      {
+        "assistant_id": "628d6c61",
+        "shift_type": "FULL",
+        "locked": false,
+        "generated": true
+      },
+      {
+        "assistant_id": "38ffc3ce",
+        "shift_type": "ON_CALL",
+        "locked": false,
+        "generated": true
+      }
+    ],
+    "16": [
+      {
+        "assistant_id": "f6164e36",
+        "shift_type": "FULL",
+        "locked": false,
+        "generated": true
+      },
+      {
+        "assistant_id": "d579723b",
+        "shift_type": "ON_CALL",
+        "locked": false,
+        "generated": true
+      }
+    ],
+    "29": [
+      {
+        "assistant_id": "38ffc3ce",
+        "shift_type": "FULL",
+        "locked": false,
+        "generated": true
+      },
+      {
+        "assistant_id": "d579723b",
+        "shift_type": "ON_CALL",
+        "locked": false,
+        "generated": true
+      }
+    ],
+    "2": [
+      {
+        "assistant_id": "f8eeb583",
+        "shift_type": "FULL",
+        "locked": false,
+        "generated": true
+      },
+      {
+        "assistant_id": "f6164e36",
+        "shift_type": "ON_CALL",
+        "locked": false,
+        "generated": true
+      }
+    ],
+    "14": [
+      {
+        "assistant_id": "27416f21",
+        "shift_type": "FULL",
+        "locked": false,
+        "generated": true
+      },
+      {
+        "assistant_id": "628d6c61",
+        "shift_type": "ON_CALL",
+        "locked": false,
+        "generated": true
+      }
+    ],
+    "3": [
+      {
+        "assistant_id": "d579723b",
+        "shift_type": "FULL",
+        "locked": false,
+        "generated": true
+      },
+      {
+        "assistant_id": "27416f21",
+        "shift_type": "ON_CALL",
+        "locked": false,
+        "generated": true
+      }
+    ],
+    "18": [
+      {
+        "assistant_id": "f6164e36",
+        "shift_type": "FULL",
+        "locked": false,
+        "generated": true
+      },
+      {
+        "assistant_id": "54fe5cd0",
+        "shift_type": "ON_CALL",
+        "locked": false,
+        "generated": true
+      }
+    ],
+    "30": [
+      {
+        "assistant_id": "54fe5cd0",
+        "shift_type": "FULL",
+        "locked": false,
+        "generated": true
+      },
+      {
+        "assistant_id": "f6164e36",
+        "shift_type": "ON_CALL",
+        "locked": false,
+        "generated": true
+      }
+    ],
+    "5": [
+      {
+        "assistant_id": "628d6c61",
+        "shift_type": "FULL",
+        "locked": false,
+        "generated": true
+      },
+      {
+        "assistant_id": "8cdf0de4",
+        "shift_type": "ON_CALL",
+        "locked": false,
+        "generated": true
+      }
+    ],
+    "26": [
+      {
+        "assistant_id": "d579723b",
+        "shift_type": "FULL",
+        "locked": false,
+        "generated": true
+      },
+      {
+        "assistant_id": "628d6c61",
+        "shift_type": "ON_CALL",
+        "locked": false,
+        "generated": true
+      }
+    ],
+    "8": [
+      {
+        "assistant_id": "27416f21",
+        "shift_type": "FULL",
+        "locked": false,
+        "generated": true
+      },
+      {
+        "assistant_id": "f8eeb583",
+        "shift_type": "ON_CALL",
+        "locked": false,
+        "generated": true
+      }
+    ],
+    "9": [
+      {
+        "assistant_id": "54fe5cd0",
+        "shift_type": "FULL",
+        "locked": false,
+        "generated": true
+      },
+      {
+        "assistant_id": "27416f21",
+        "shift_type": "ON_CALL",
+        "locked": false,
+        "generated": true
+      }
+    ],
+    "27": [
+      {
+        "assistant_id": "f8eeb583",
+        "shift_type": "FULL",
+        "locked": false,
+        "generated": true
+      },
+      {
+        "assistant_id": "f6164e36",
+        "shift_type": "ON_CALL",
+        "locked": false,
+        "generated": true
+      }
+    ],
+    "1": [
+      {
+        "assistant_id": "f6164e36",
+        "shift_type": "FULL",
+        "locked": false,
+        "generated": true
+      },
+      {
+        "assistant_id": "38ffc3ce",
+        "shift_type": "ON_CALL",
+        "locked": false,
+        "generated": true
+      }
+    ],
+    "4": [
+      {
+        "assistant_id": "38ffc3ce",
+        "shift_type": "FULL",
+        "locked": false,
+        "generated": true
+      },
+      {
+        "assistant_id": "8cdf0de4",
+        "shift_type": "ON_CALL",
+        "locked": false,
+        "generated": true
+      }
+    ]
   },
-  "seed": null,
-  "created_at": "2026-08-09T15:16:40.424285",
-  "modified_at": "2026-08-09T17:45:35.450387"
+  "settings": {
+    "f6164e36": {
+      "min": null,
+      "max": null,
+      "max_consecutive_days": 1,
+      "min_block_days": 1,
+      "min_gap_days": 0,
+      "oncall_attach": "none"
+    },
+    "8cdf0de4": {
+      "min": null,
+      "max": null,
+      "max_consecutive_days": 4,
+      "min_block_days": 3,
+      "min_gap_days": 0,
+      "oncall_attach": "none"
+    },
+    "27416f21": {
+      "min": null,
+      "max": null,
+      "max_consecutive_days": 2,
+      "min_block_days": 1,
+      "min_gap_days": 0,
+      "oncall_attach": "none"
+    },
+    "d579723b": {
+      "min": null,
+      "max": null,
+      "max_consecutive_days": 1,
+      "min_block_days": 1,
+      "min_gap_days": 0,
+      "oncall_attach": "none"
+    },
+    "f8eeb583": {
+      "min": null,
+      "max": null,
+      "max_consecutive_days": 1,
+      "min_block_days": 1,
+      "min_gap_days": 0,
+      "oncall_attach": "none"
+    },
+    "38ffc3ce": {
+      "min": null,
+      "max": null,
+      "max_consecutive_days": 2,
+      "min_block_days": 1,
+      "min_gap_days": 0,
+      "oncall_attach": "none"
+    },
+    "628d6c61": {
+      "min": null,
+      "max": null,
+      "max_consecutive_days": 1,
+      "min_block_days": 1,
+      "min_gap_days": 0,
+      "oncall_attach": "none"
+    },
+    "54fe5cd0": {
+      "min": null,
+      "max": null,
+      "max_consecutive_days": 1,
+      "min_block_days": 1,
+      "min_gap_days": 0,
+      "oncall_attach": "none"
+    }
+  },
+  "seed": 42,
+  "created_at": "2026-08-16T12:00:00",
+  "modified_at": "2026-08-16T12:00:00"
 }
