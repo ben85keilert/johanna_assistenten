@@ -40,8 +40,22 @@ Jeder Helfer hat eigene Vorgaben:
   optional („Auto"). Das Minimum ist ein Verteilungsziel, das Maximum eine harte
   Grenze — der Generator überschreitet es nie; im Zweifel bleibt ein Tag unbesetzt
   und es erscheint eine Warnung. Min ≤ Max wird automatisch eingehalten.
-- **Rufbereitschaft ≈ Dienste**: jeder Helfer bekommt im Monat etwa so viele
-  Rufbereitschaften wie (gewichtete) Dienste.
+- **Rufbereitschaft = Dienste**: jeder Helfer bekommt im Monat **genauso viele**
+  Rufbereitschaften wie (gewichtete) Dienste — Gleichstand ist Pflicht, nicht
+  nur Ziel. Bei halben Diensten (z. B. 4,5) darf auf- oder abgerundet werden.
+  Der Generator gleicht Überhänge am Ende aktiv aus; geht der Gleichstand
+  wegen anderer Regeln nicht auf, erscheint eine Warnung.
+- **Mindestabstand** (einstellbar je Helfer, 0 = aus): so viele **freie Tage**
+  müssen zwischen zwei Einsatzblöcken derselben Person liegen (Dienst und
+  Rufbereitschaft zusammen gezählt; direkt angrenzende Tage gehören zum selben
+  Block). Die Termine werden dadurch gestreut. **Die Abstände sind ein Muss** —
+  der Generator unterschreitet sie nie, auch nicht als Notlösung; im Zweifel
+  bleibt ein Tag offen.
+- **Rufbereitschaft anhängen** („Vorher"/„Nachher", Standard: aus): die
+  Rufbereitschaft wird als gleich langer Block **direkt vor bzw. nach dem
+  Dienstblock** eingeplant. Wichtig für Helfer mit langer Anreise, die am
+  Stück vor Ort sein wollen (z. B. 3 Tage Dienst + 3 Tage Rufbereitschaft
+  hintereinander). Max. Folge zählt dabei weiter je Art getrennt.
 - **Max. Tage am Stück** (1–7): mehr aufeinanderfolgende Diensttage sind nicht
   erlaubt. Gilt für Dienst **und** Rufbereitschaft, aber **je Art getrennt
   gezählt**: 3 Tage Dienst direkt gefolgt von 3 Tagen Rufbereitschaft sind zwei
@@ -105,11 +119,19 @@ Zwei Tabs:
    - Unter dem Raster: Zusammenfassung pro Helfer als Tupel `Name (VOLL|VM|NM|RB)`
      mit Legende sowie Warnhinweise (unbesetzte/halbe Tage, Tage ohne
      Rufbereitschaft, Zielabweichungen, Abweichungen Rufbereitschaft/Dienste).
-2. **Team-Tab**: Links die Helferliste (anlegen/entfernen, Name und Farbe;
-   **Min./Max. Dienste, Max. Folge und Min. Block direkt in der Tabelle** mit
-   Minus/Plus-Buttons; Min./Max. Dienste sowie Min. Block und Max. Folge halten
-   sich jeweils automatisch konsistent). Einzelne Abwesenheitstage stempelt man
-   direkt im Planraster (Urlaub- oder Block-Stempel). Rechts daneben die
+2. **Team-Tab**: Links die Helferliste (anlegen/entfernen, Name und Farbe) in
+   **zwei Vorlagen-Tabs** („Vorlage 1"/„Vorlage 2"): jede Vorlage hält einen
+   kompletten Satz Einstellungen je Helfer — **Min./Max. Dienste, Max. Folge,
+   Min. Block, Abstand (Mindestabstand) und RB anhängen** — direkt in der
+   Tabelle mit Minus/Plus-Buttons (Min./Max.-Paare halten sich automatisch
+   konsistent). Änderungen an einer Vorlage wirken **nicht sofort** auf den
+   Plan: erst der Button **„In Dienstplan … übernehmen"** überträgt die
+   Vorlage in den aktuell geöffneten Monat. So lassen sich zwei verschiedene
+   Konstellationen vorbereiten und je nach Monat in den Dienstplan migrieren;
+   jeder Monat merkt sich die übernommenen Einstellungen selbst. Name und
+   Farbe gelten dagegen immer sofort und in beiden Vorlagen. Einzelne
+   Abwesenheitstage stempelt man direkt im Planraster (Urlaub- oder
+   Block-Stempel). Rechts daneben die
    **Abwesenheitsübersicht**: alle Abwesenheiten aller Helfer chronologisch
    sortiert — Zeiträume **und Einzeltage**, Urlaub und Block (Block-Einträge sind
    mit `[Block]` gekennzeichnet), monatsübergreifend. Hinzufügen, **Bearbeiten**
@@ -138,12 +160,15 @@ Zwei Tabs:
 Endet ein manuell gesetzter Block mit einem halben Tag (z. B. Tag 3 nur VM), vergibt
 der Generator die fehlende Tageshälfte (NM) an eine andere Person.
 
-Nach der Dienstvergabe verteilt der Generator die **Rufbereitschaft**: erst Blöcke
-für Helfer mit weiter Anreise, dann die restlichen Tage — Ziel ist, dass jeder etwa
-so viele Rufbereitschaften wie Dienste bekommt, nie am eigenen Diensttag. Ein hartes
-„Max. Dienste" wird nie überschritten; wenn dadurch (oder in kleinen Teams durch die
-Folgen-Grenzen) Tage nicht besetzbar sind, bleiben sie offen und erscheinen als
-Warnung unter dem Raster — das ist gewollt, nicht kaputt.
+Nach der Dienstvergabe verteilt der Generator die **Rufbereitschaft**: bei
+Helfern mit „RB anhängen" wird der RB-Block schon zusammen mit dem Dienstblock
+vergeben, dann kommen Blöcke für die übrigen Anreise-Helfer und die restlichen
+Tage — jeder bekommt genauso viele Rufbereitschaften wie Dienste, nie am eigenen
+Diensttag. Eine abschließende Ausgleichsrunde verschiebt überzählige
+Rufbereitschaften zu Helfern unter ihrem Soll. Ein hartes „Max. Dienste" und der
+Mindestabstand werden nie verletzt; wenn dadurch (oder in kleinen Teams durch
+die Folgen-Grenzen) Tage nicht besetzbar sind, bleiben sie offen und erscheinen
+als Warnung unter dem Raster — das ist gewollt, nicht kaputt.
 
 ## Datenhaltung
 
@@ -153,48 +178,74 @@ her (zuletzt geöffneter Monat, Fenstergröße).
 
 ### `data/team.json` — das Team (monatsübergreifend)
 
-Enthält neben Name/Farbe auch die **personenbezogenen Einschränkungen**: Urlaube
-und Einzeltage sowie Block-Zeiten (datumsbasiert, gelten in jedem berührten Monat —
-auch monatsübergreifend), Max. Folge und Min. Block:
+Enthält neben Name/Farbe die **personenbezogenen Einschränkungen** (Urlaube
+und Einzeltage sowie Block-Zeiten — datumsbasiert, gelten in jedem berührten
+Monat, auch monatsübergreifend — Max. Folge, Min. Block, Mindestabstand,
+RB-Anhang) **und die zwei Einstellungs-Vorlagen** des Team-Tabs. Die im Repo
+versionierte Datei ist die feste **Beispielvorlage** (Team Stefan, Tobias,
+Stefan H., Irisz, Geli, Max, Paula, Laura):
 
 ```json
 {
-  "version": 4,
+  "version": 5,
   "assistants": [
-    { "id": "f1f04d0e", "name": "Martha", "color": "#3498DB", "active": true,
+    { "id": "8cdf0de4", "name": "Tobias", "color": "#00aa00", "active": true,
       "constraints": {
-        "assistant_id": "f1f04d0e",
-        "unavailable_dates": ["2026-08-15"],
-        "vacation_ranges": [["2026-08-28", "2026-09-05"]],
+        "assistant_id": "8cdf0de4",
+        "unavailable_dates": [],
+        "vacation_ranges": [],
         "blocked_dates": [],
-        "blocked_ranges": [["2026-08-20", "2026-08-22"]],
-        "max_consecutive_days": 3,
-        "min_block_days": 1 } }
+        "blocked_ranges": [],
+        "max_consecutive_days": 4,
+        "min_block_days": 3,
+        "min_gap_days": 0,
+        "oncall_attach": "none" } }
+  ],
+  "profiles": [
+    { "name": "Vorlage 1",
+      "settings": {
+        "8cdf0de4": { "min_shifts": null, "max_shifts": null,
+                      "max_consecutive_days": 4, "min_block_days": 3,
+                      "min_gap_days": 0, "oncall_attach": "none" } } },
+    { "name": "Vorlage 2", "settings": { "…": {} } }
   ]
 }
 ```
 
+- `min_gap_days`: Mindestabstand in freien Tagen zwischen zwei Einsatzblöcken
+  (0 = aus).
+- `oncall_attach`: `"none"`, `"before"` oder `"after"` — Rufbereitschaft als
+  Block direkt vor/nach dem Dienstblock.
+
 ### `data/plans/plan_JJJJ_MM.json` — ein Plan pro Monat
 
-Enthält den Dienstplan des Monats und als einzige monatsbezogene Vorgabe die
-**Soll-Dienste als Min/Max-Spanne** (`targets`) je Helfer:
+Enthält den Dienstplan des Monats und den **Schnappschuss der
+Planungs-Einstellungen** (`settings`) je Helfer — das, was zuletzt (z. B. per
+Vorlage) für diesen Monat übernommen wurde:
 
 ```json
 {
-  "version": 4,
+  "version": 5,
   "year": 2026,
-  "month": 8,
+  "month": 9,
   "schedule": {
-    "1": [ { "assistant_id": "f1f04d0e", "shift_type": "FULL",
+    "1": [ { "assistant_id": "f6164e36", "shift_type": "FULL",
              "locked": true, "generated": false },
-           { "assistant_id": "a27b3c91", "shift_type": "ON_CALL",
+           { "assistant_id": "8cdf0de4", "shift_type": "ON_CALL",
              "locked": false, "generated": true } ]
   },
-  "targets": { "f1f04d0e": { "min": 3, "max": 6 }, "a27b3c91": { "min": null, "max": null } },
+  "settings": {
+    "f6164e36": { "min": 3, "max": 6, "max_consecutive_days": 1,
+                  "min_block_days": 1, "min_gap_days": 0,
+                  "oncall_attach": "none" }
+  },
   "seed": 42,
   "created_at": "…", "modified_at": "…"
 }
 ```
+
+Aus Version 4 migrierte Monatsdateien kennen nur die Soll-Spanne (`min`/`max`);
+die übrigen Felder kommen dann weiterhin aus `team.json`.
 
 - `locked`: fixiert — übersteht das Neuwürfeln.
 - `generated`: wurde vom Zufallsgenerator vergeben (farblich markiert), nicht von Hand.
@@ -233,8 +284,9 @@ Datendateien müssen nach jedem Update weiter funktionieren.** Dafür gilt:
 
 Es geht um eine reale Teamverwaltung — **mit echten Personendaten wird vertraulich
 umgegangen; sie gehören nicht ins Git-Repository.** Die im Repo versionierten Daten
-(`data/` mit Martha, Jürgen, Bertha …) sind **ausschließlich Dummy-/Beispieldaten**.
-Sie sind absichtlich eingecheckt, damit der Aufbau der Dateien nachvollziehbar ist.
+(`data/` mit dem Beispielteam Stefan, Tobias, Irisz …) sind **ausschließlich
+Dummy-/Beispieldaten**. Sie sind absichtlich eingecheckt, damit der Aufbau der
+Dateien nachvollziehbar ist und als Beispielvorlage zum Ausprobieren dient.
 
 ## Ausblick (nur notiert, noch nicht umgesetzt)
 

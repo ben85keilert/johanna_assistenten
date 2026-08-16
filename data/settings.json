@@ -1,10 +1,10 @@
 {
-  "version": 2,
+  "version": 3,
   "last_year": 2026,
-  "last_month": 8,
-  "window_geometry": "01d9d0cb0003000000000000ffffffda000005ff000003190000000100000019000005fe00000332000000000200000006000000000000000000000005ff00000319",
-  "confirm_overwrite": true,
-  "seed": 4,
+  "last_month": 9,
+  "window_geometry": "01d9d0cb000300000000006200000062000006c3000003850000006400000064000006c100000383000000000000000003200000006400000064000006c100000383",
+  "allow_overwrite": false,
+  "seed": 42,
   "deterministic": true,
   "split_view": false
 }

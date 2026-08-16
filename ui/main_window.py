@@ -55,7 +55,9 @@ class MainWindow(QMainWindow):
         current = self.tab_widget.currentWidget()
         if current is None:
             return []
-        steppers = current.findChildren(BigStepper)
+        # Nur sichtbare Felder (im Team-Tab liegt je Vorlagen-Tab eine
+        # eigene Tabelle - die inaktive soll nicht mitnavigiert werden)
+        steppers = [s for s in current.findChildren(BigStepper) if s.isVisible()]
         # Leserichtung: von oben nach unten, links nach rechts
         def position(s):
             p = s.mapTo(current, s.rect().topLeft())

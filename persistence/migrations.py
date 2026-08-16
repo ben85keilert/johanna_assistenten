@@ -6,9 +6,10 @@ Die Migrationen laufen schrittweise (v1 -> v2 -> ...), damit beliebig alte
 Dateien nach einem Programm-Update weiter funktionieren.
 """
 from __future__ import annotations
+import copy
 
-CURRENT_TEAM_VERSION = 4
-CURRENT_PLAN_VERSION = 4
+CURRENT_TEAM_VERSION = 5
+CURRENT_PLAN_VERSION = 5
 CURRENT_SETTINGS_VERSION = 3
 
 
@@ -43,6 +44,31 @@ def migrate_team(data) -> dict:
             constraints.setdefault("blocked_dates", [])
             constraints.setdefault("blocked_ranges", [])
         version = 4
+
+    if version < 5:
+        # v4 -> v5: Mindestabstand + RB-Anhang je Helfer; ausserdem zwei
+        # Einstellungs-Vorlagen, anfangs beide aus den bestehenden Werten
+        for assistant in data.get("assistants", []):
+            constraints = assistant.get("constraints", {})
+            constraints.setdefault("min_gap_days", 0)
+            constraints.setdefault("oncall_attach", "none")
+        if not data.get("profiles"):
+            settings = {}
+            for assistant in data.get("assistants", []):
+                constraints = assistant.get("constraints", {})
+                settings[assistant.get("id", "")] = {
+                    "min_shifts": None,
+                    "max_shifts": None,
+                    "max_consecutive_days": constraints.get("max_consecutive_days", 3),
+                    "min_block_days": constraints.get("min_block_days", 1),
+                    "min_gap_days": constraints.get("min_gap_days", 0),
+                    "oncall_attach": constraints.get("oncall_attach", "none"),
+                }
+            data["profiles"] = [
+                {"name": "Vorlage 1", "settings": settings},
+                {"name": "Vorlage 2", "settings": copy.deepcopy(settings)},
+            ]
+        version = 5
 
     data["version"] = CURRENT_TEAM_VERSION
     return data
@@ -96,6 +122,26 @@ def migrate_plan(data: dict) -> dict:
             constraints.setdefault("blocked_dates", [])
             constraints.setdefault("blocked_ranges", [])
         version = 4
+
+    if version < 5:
+        # v4 -> v5: der Monat speichert die uebernommenen Einstellungen
+        # vollstaendig ("settings" statt nur "targets"). Alte Dateien kennen
+        # nur die Soll-Spanne; die uebrigen Felder fehlen dann und kommen
+        # beim Laden weiter aus team.json
+        targets = data.pop("targets", {})
+        data.setdefault("settings", {
+            aid: (
+                {"min": t.get("min"), "max": t.get("max")}
+                if isinstance(t, dict) else {"min": t, "max": t}
+            )
+            for aid, t in targets.items()
+        })
+        # Vollplan-Dateien (Datei > Speichern): neue Constraint-Felder
+        for assistant in data.get("assistants", []):
+            constraints = assistant.get("constraints", {})
+            constraints.setdefault("min_gap_days", 0)
+            constraints.setdefault("oncall_attach", "none")
+        version = 5
 
     data["version"] = CURRENT_PLAN_VERSION
     return data

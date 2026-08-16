@@ -8,6 +8,7 @@ from models.plan import MonthPlan
 from models.assistant import (
     Assistant, AssistantConstraints, absence_days, set_absence_days
 )
+from models.profile import AssistantSettings, SettingsProfile
 from models.shift import ShiftEntry, ShiftType
 from .migrations import (
     migrate_team,
@@ -43,6 +44,8 @@ def _constraints_to_dict(c: AssistantConstraints, include_target: bool = True) -
         ],
         "max_consecutive_days": c.max_consecutive_days,
         "min_block_days": c.min_block_days,
+        "min_gap_days": c.min_gap_days,
+        "oncall_attach": c.oncall_attach,
     }
     if include_target:
         result["min_shifts"] = c.min_shifts
@@ -80,9 +83,56 @@ def _constraints_from_dict(c_data: dict, assistant_id: str = "") -> AssistantCon
         ],
         max_consecutive_days=c_data.get("max_consecutive_days", 3),
         min_block_days=c_data.get("min_block_days", 1),
+        min_gap_days=c_data.get("min_gap_days", 0),
+        oncall_attach=c_data.get("oncall_attach", "none"),
         min_shifts=c_data.get("min_shifts"),
         max_shifts=c_data.get("max_shifts"),
     )
+
+
+def _profile_settings_to_dict(s: AssistantSettings) -> dict:
+    return {
+        "min_shifts": s.min_shifts,
+        "max_shifts": s.max_shifts,
+        "max_consecutive_days": s.max_consecutive_days,
+        "min_block_days": s.min_block_days,
+        "min_gap_days": s.min_gap_days,
+        "oncall_attach": s.oncall_attach,
+    }
+
+
+def _profile_settings_from_dict(d: dict) -> AssistantSettings:
+    return AssistantSettings(
+        min_shifts=d.get("min_shifts"),
+        max_shifts=d.get("max_shifts"),
+        max_consecutive_days=d.get("max_consecutive_days", 3),
+        min_block_days=d.get("min_block_days", 1),
+        min_gap_days=d.get("min_gap_days", 0),
+        oncall_attach=d.get("oncall_attach", "none"),
+    )
+
+
+def _profile_to_dict(p: SettingsProfile) -> dict:
+    return {
+        "name": p.name,
+        "settings": {
+            aid: _profile_settings_to_dict(s) for aid, s in p.settings.items()
+        },
+    }
+
+
+def _profile_from_dict(d: dict, fallback_name: str) -> SettingsProfile:
+    return SettingsProfile(
+        name=d.get("name", fallback_name),
+        settings={
+            aid: _profile_settings_from_dict(s_data)
+            for aid, s_data in d.get("settings", {}).items()
+        },
+    )
+
+
+def default_profiles() -> list[SettingsProfile]:
+    return [SettingsProfile(name="Vorlage 1"), SettingsProfile(name="Vorlage 2")]
 
 
 def _entry_to_dict(e: ShiftEntry) -> dict:
@@ -185,11 +235,15 @@ def team_path() -> Path:
     return TEAM_FILE
 
 
-def save_team(assistants: list[Assistant]) -> None:
+def save_team(assistants: list[Assistant],
+              profiles: list[SettingsProfile] | None = None) -> None:
     # Personenbezogene Constraints (Urlaube, Einzeltage, Max/Min) leben
     # monatsuebergreifend hier; nur die Soll-Dienste (min/max) gehoeren
-    # zum Monatsplan
+    # zum Monatsplan. Die zwei Einstellungs-Vorlagen (Team-Tab) liegen
+    # ebenfalls hier
     DATA_DIR.mkdir(parents=True, exist_ok=True)
+    if profiles is None:
+        profiles = load_profiles()
     data = {
         "version": CURRENT_TEAM_VERSION,
         "assistants": [
@@ -199,6 +253,7 @@ def save_team(assistants: list[Assistant]) -> None:
             }
             for a in assistants
         ],
+        "profiles": [_profile_to_dict(p) for p in profiles],
     }
     with open(TEAM_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
@@ -229,6 +284,22 @@ def load_team() -> list[Assistant]:
     return assistants
 
 
+def load_profiles() -> list[SettingsProfile]:
+    """Laedt die zwei Einstellungs-Vorlagen aus team.json (immer genau
+    zwei; fehlende werden mit leeren Vorlagen aufgefuellt)."""
+    profiles = default_profiles()
+    if not TEAM_FILE.exists():
+        return profiles
+
+    with open(TEAM_FILE, "r", encoding="utf-8") as f:
+        data = migrate_team(json.load(f))
+
+    for i, p_data in enumerate(data.get("profiles", [])[:2]):
+        if isinstance(p_data, dict):
+            profiles[i] = _profile_from_dict(p_data, profiles[i].name)
+    return profiles
+
+
 # --- Monatsplaene (automatische Ablage unter data/plans/) ---
 
 def plan_path(year: int, month: int) -> Path:
@@ -242,10 +313,17 @@ def save_plan(plan: MonthPlan) -> None:
         "year": plan.year,
         "month": plan.month,
         "schedule": _schedule_to_dict(plan.schedule),
-        # Nur die monatsbezogenen Soll-Dienste; alle uebrigen Constraints
-        # liegen monatsuebergreifend in team.json
-        "targets": {
-            a.id: {"min": a.constraints.min_shifts, "max": a.constraints.max_shifts}
+        # Schnappschuss der Planungs-Einstellungen dieses Monats (z. B. aus
+        # einer Vorlage uebernommen); Abwesenheiten liegen weiter in team.json
+        "settings": {
+            a.id: {
+                "min": a.constraints.min_shifts,
+                "max": a.constraints.max_shifts,
+                "max_consecutive_days": a.constraints.max_consecutive_days,
+                "min_block_days": a.constraints.min_block_days,
+                "min_gap_days": a.constraints.min_gap_days,
+                "oncall_attach": a.constraints.oncall_attach,
+            }
             for a in plan.assistants
         },
         "seed": plan.seed,
@@ -258,8 +336,10 @@ def save_plan(plan: MonthPlan) -> None:
 
 def load_plan(year: int, month: int, assistants: list[Assistant]) -> MonthPlan | None:
     """Laedt den Monatsplan. Die uebergebenen Assistenten (aus team.json)
-    behalten ihre Constraints; nur die Soll-Dienste (min/max) kommen aus
-    der Monatsdatei."""
+    behalten ihre Abwesenheiten; die Planungs-Einstellungen (Soll-Spanne,
+    Max. Folge, Min. Block, Mindestabstand, RB-Anhang) kommen aus dem
+    Schnappschuss der Monatsdatei. Alte Dateien kennen nur die Soll-Spanne -
+    die uebrigen Felder behalten dann die Werte aus team.json."""
     path = plan_path(year, month)
     if not path.exists():
         return None
@@ -267,7 +347,7 @@ def load_plan(year: int, month: int, assistants: list[Assistant]) -> MonthPlan |
     with open(path, "r", encoding="utf-8") as f:
         data = migrate_plan(json.load(f))
 
-    targets = data.get("targets", {})
+    settings_map = data.get("settings", {})
 
     # Backfill fuer alte v2-Dateien: Constraints aus der Monatsdatei einmalig
     # ins (noch leere) Team uebernehmen; gespeichert wird ab dann in team.json
@@ -288,14 +368,25 @@ def load_plan(year: int, month: int, assistants: list[Assistant]) -> MonthPlan |
             # absolut, so geht aus keiner alten Monatsdatei etwas verloren
             merged = absence_days(assistant.constraints) | absence_days(legacy_constraints)
             set_absence_days(assistant.constraints, merged)
-        target = targets.get(assistant.id)
-        if isinstance(target, dict):
-            assistant.constraints.min_shifts = target.get("min")
-            assistant.constraints.max_shifts = target.get("max")
+        s = settings_map.get(assistant.id)
+        c = assistant.constraints
+        if isinstance(s, dict):
+            c.min_shifts = s.get("min")
+            c.max_shifts = s.get("max")
+            # Nur vorhandene Felder uebernehmen: aus v4 migrierte Dateien
+            # kennen nur die Soll-Spanne, der Rest bleibt aus team.json
+            if "max_consecutive_days" in s:
+                c.max_consecutive_days = s["max_consecutive_days"]
+            if "min_block_days" in s:
+                c.min_block_days = s["min_block_days"]
+            if "min_gap_days" in s:
+                c.min_gap_days = s["min_gap_days"]
+            if "oncall_attach" in s:
+                c.oncall_attach = s["oncall_attach"]
         else:
-            # Defensiv: alter int-Wert trotz Migration, oder Helfer ohne Eintrag
-            assistant.constraints.min_shifts = target
-            assistant.constraints.max_shifts = target
+            # Helfer ohne Eintrag (z. B. spaeter angelegt): Soll auf Auto
+            c.min_shifts = None
+            c.max_shifts = None
 
     return MonthPlan(
         year=year,
