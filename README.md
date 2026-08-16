@@ -80,8 +80,66 @@ baut die Windows-Version in der Cloud:
 - **Manuell**: auf GitHub unter *Actions → Windows-Build → Run workflow* starten;
   das Ergebnis liegt danach als Artifact (`JohannaAssistenten-windows.zip`) zum
   Download bereit.
-- **Release**: beim Pushen eines Tags `v*` (z. B. `git tag v1.0 && git push --tags`)
-  wird gebaut und die ZIP-Datei automatisch an das GitHub-Release angehängt.
+- **Release**: beim Pushen eines Tags `v*` wird gebaut und die ZIP-Datei
+  automatisch an das GitHub-Release angehängt — siehe nächster Abschnitt.
+
+### Neue Version veröffentlichen (Tag auf `main` setzen)
+
+Der Build für ein Release wird **ausschließlich durch einen Versions-Tag `v*`
+ausgelöst**. Der Tag gehört auf `main` — also erst mergen, dann taggen, damit
+die gebaute `.exe` genau dem entspricht, was auf `main` liegt.
+
+**1. Sicherstellen, dass alles auf `main` gemerged ist** (Pull Request gemerged):
+
+```bash
+git checkout main
+git pull origin main
+git log --oneline -3          # der oberste Commit wird getaggt
+```
+
+**2. Letzte Version nachsehen und um 0.0.1 erhöhen:**
+
+```bash
+git fetch origin --tags
+git tag -l | sort -V | tail -5
+```
+
+Aus dem letzten Tag ergibt sich der neue: `v0.1.2` → `v0.1.3` (Patch +1 für
+Fehlerbehebungen und kleinere Erweiterungen). Bei größeren Funktionssprüngen
+stattdessen die mittlere Zahl erhöhen (`v0.1.3` → `v0.2.0`).
+
+**3. Tag anlegen und pushen:**
+
+```bash
+git tag -a v0.1.3 -m "v0.1.3: kurze Beschreibung der Änderungen"
+git push origin v0.1.3
+```
+
+`-a` erzeugt einen annotierten Tag (mit Autor, Datum und Nachricht) — für
+Releases immer diesem Weg den Vorzug geben. Ohne Angabe eines Commits zeigt der
+Tag auf den gerade ausgecheckten Stand, also auf `main`. Soll ein bestimmter
+Commit getaggt werden, dessen Hash anhängen:
+
+```bash
+git tag -a v0.1.3 dd0c236 -m "v0.1.3: kurze Beschreibung der Änderungen"
+```
+
+**4. Build beobachten:** Der Push des Tags startet den Workflow *Windows-Build*
+automatisch (Reiter *Actions* auf GitHub, Laufzeit einige Minuten). Danach liegt
+`JohannaAssistenten-windows.zip` am GitHub-**Release** zum Tag und zusätzlich als
+Artifact am Workflow-Lauf.
+
+> **Hinweis:** `git push` ohne Tag-Namen überträgt **keine** Tags — der Build
+> startet dann nicht. Entweder wie oben den Tag einzeln pushen oder
+> `git push origin --tags` für alle noch nicht übertragenen Tags verwenden.
+
+**Tag korrigieren**, solange das Release noch nicht verteilt ist (löscht Tag
+lokal und auf GitHub, danach neu anlegen):
+
+```bash
+git tag -d v0.1.3
+git push origin :refs/tags/v0.1.3
+```
 
 ## Verwendung
 
