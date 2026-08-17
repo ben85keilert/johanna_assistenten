@@ -106,4 +106,4 @@ class CellDelegate(QStyledItemDelegate):
         painter.restore()
 
     def sizeHint(self, option: QStyleOptionViewItem, index) -> QSize:
-        return QSize(60, theme.ROW_HEIGHT)
+        return QSize(theme.DAY_COL_MIN_W, theme.ROW_HEIGHT)

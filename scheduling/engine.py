@@ -15,9 +15,11 @@ Jeder Helfer bekommt im Monat genauso viele Rufbereitschaften wie
 Folgen (Max. Folge, Min. Block) gelten fuer Dienst und RB gleichermassen,
 werden aber je Art getrennt gezaehlt.
 Helfer mit min_block_days > 1 werden nur in zusammenhaengenden Bloecken
-eingeplant (weite Anreise). Mit oncall_attach ("before"/"after") haengt der
-Generator die Rufbereitschaft als Block direkt vor bzw. nach den Dienstblock,
-damit die Person am Stueck vor Ort ist.
+eingeplant (weite Anreise). Mit oncall_attach ("before"/"after"/"both") haengt
+der Generator die Rufbereitschaft als Block direkt vor, nach bzw. auf beide
+Seiten verteilt an den Dienstblock, damit die Person am Stueck vor Ort ist.
+Die Gesamtzahl der angehaengten RB-Tage bleibt dabei immer so gross wie der
+Dienstblock - auch bei "both" - damit RB = Dienste aufgeht.
 min_gap_days ist der Mindestabstand in freien Tagen zwischen zwei
 Einsatzbloecken derselben Person (Dienst und RB zusammen gezaehlt) - eine
 harte Regel, die der Generator nie unterschreitet.
@@ -29,6 +31,32 @@ from datetime import date
 from models import MonthPlan, ShiftEntry, ShiftType, DUTY_TYPES, is_duty
 
 ON_CALL_KINDS = (ShiftType.ON_CALL,)
+
+
+def attach_spans(attach: str, start: int, block_len: int) -> list[range]:
+    """Tage fuer die angehaengte Rufbereitschaft rund um den Dienstblock
+    start .. start + block_len - 1.
+
+    "before"/"after": ein gleich langer RB-Block davor bzw. danach.
+    "both": derselbe RB-Block, aufgeteilt auf beide Seiten (bei ungerader
+    Laenge liegt der laengere Teil hinten). Die Summe bleibt block_len,
+    damit die Gleichung "RB-Tage = Dienste" weiter aufgeht.
+    """
+    if attach == "before":
+        return [range(start - block_len, start)]
+    if attach == "after":
+        return [range(start + block_len, start + 2 * block_len)]
+    if attach == "both":
+        before_len = block_len // 2
+        after_len = block_len - before_len
+        spans = []
+        if before_len:
+            spans.append(range(start - before_len, start))
+        if after_len:
+            end = start + block_len
+            spans.append(range(end, end + after_len))
+        return spans
+    return []
 
 
 def is_on_vacation(assistant, day: int, year: int, month: int) -> bool:
@@ -221,6 +249,21 @@ def generate(plan: MonthPlan, seed: int | None = None) -> MonthPlan:
         # Helfer unter ihrem Minimum zuerst, dann die mit den wenigsten Diensten
         return min(pool, key=lambda a: (0 if below_min(a) else 1, assigned[a.id], rng.random()))
 
+    def _rb_span_free(a, rb_days: range) -> bool:
+        """Passt ein angehaengter RB-Block auf diese Tage?"""
+        if rb_days[0] < 1 or rb_days[-1] > days_in_month:
+            return False
+        if not all(_needs_oncall(plan, d) for d in rb_days):
+            return False
+        if any(_works_on(plan, a.id, d) for d in rb_days):
+            return False
+        if any(is_unavailable(a, d, year, month) for d in rb_days):
+            return False
+        rb_run = _run_length_if_assigned(
+            plan, a.id, rb_days[0], rb_days[-1], ON_CALL_KINDS
+        )
+        return rb_run <= a.constraints.max_consecutive_days
+
     block_assistants = [a for a in active if a.constraints.min_block_days > 1]
     single_assistants = [a for a in active if a.constraints.min_block_days <= 1]
 
@@ -247,22 +290,10 @@ def generate(plan: MonthPlan, seed: int | None = None) -> MonthPlan:
                 if run > a.constraints.max_consecutive_days:
                     continue
                 span_first, span_last = start, start + block_len - 1
-                if attach in ("before", "after"):
-                    rb_start = start - block_len if attach == "before" else start + block_len
-                    rb_days = range(rb_start, rb_start + block_len)
-                    if rb_days[0] < 1 or rb_days[-1] > days_in_month:
-                        continue
-                    if not all(_needs_oncall(plan, d) for d in rb_days):
-                        continue
-                    if any(_works_on(plan, a.id, d) for d in rb_days):
-                        continue
-                    if any(is_unavailable(a, d, year, month) for d in rb_days):
-                        continue
-                    rb_run = _run_length_if_assigned(
-                        plan, a.id, rb_days[0], rb_days[-1], ON_CALL_KINDS
-                    )
-                    if rb_run > a.constraints.max_consecutive_days:
-                        continue
+                rb_spans = attach_spans(attach, start, block_len)
+                if not all(_rb_span_free(a, rb_days) for rb_days in rb_spans):
+                    continue
+                for rb_days in rb_spans:
                     span_first = min(span_first, rb_days[0])
                     span_last = max(span_last, rb_days[-1])
                 if _violates_min_gap(plan, a, span_first, span_last, days_in_month):
@@ -274,35 +305,46 @@ def generate(plan: MonthPlan, seed: int | None = None) -> MonthPlan:
             for d in range(start, start + block_len):
                 _add_entry(plan, d, a.id, ShiftType.FULL)
             assigned[a.id] += block_len
-            if attach in ("before", "after"):
-                rb_start = start - block_len if attach == "before" else start + block_len
-                for d in range(rb_start, rb_start + block_len):
+            for rb_days in attach_spans(attach, start, block_len):
+                for d in rb_days:
                     _add_entry(plan, d, a.id, ShiftType.ON_CALL)
-                oncall_assigned[a.id] += block_len
+                    oncall_assigned[a.id] += 1
 
     def try_attach_oncall(a, day: int) -> None:
         """Haengt fuer Helfer mit oncall_attach die Rufbereitschaft direkt
-        an einen einzeln vergebenen Diensttag an (best effort)."""
+        an einen einzeln vergebenen Diensttag an (best effort).
+
+        Bei "both" werden beide Seiten versucht; da RB-Tage die Dienstzahl
+        nicht ueberschreiten duerfen, bleibt es bei einem einzelnen
+        Diensttag in der Regel bei einer Seite.
+        """
         attach = a.constraints.oncall_attach
-        if attach not in ("before", "after"):
+        if attach == "before":
+            rb_days = [day - 1]
+        elif attach == "after":
+            rb_days = [day + 1]
+        elif attach == "both":
+            rb_days = [day - 1, day + 1]
+        else:
             return
-        rb_day = day - 1 if attach == "before" else day + 1
-        if not 1 <= rb_day <= days_in_month:
-            return
-        if oncall_assigned[a.id] + 1 > assigned[a.id] + 0.5:
-            return
-        if not _needs_oncall(plan, rb_day):
-            return
-        if _works_on(plan, a.id, rb_day):
-            return
-        if is_unavailable(a, rb_day, year, month):
-            return
-        if exceeds_consecutive(plan, a.id, rb_day, ON_CALL_KINDS):
-            return
-        if _violates_min_gap(plan, a, rb_day, rb_day, days_in_month):
-            return
-        _add_entry(plan, rb_day, a.id, ShiftType.ON_CALL)
-        oncall_assigned[a.id] += 1
+
+        for rb_day in rb_days:
+            if not 1 <= rb_day <= days_in_month:
+                continue
+            if oncall_assigned[a.id] + 1 > assigned[a.id] + 0.5:
+                continue
+            if not _needs_oncall(plan, rb_day):
+                continue
+            if _works_on(plan, a.id, rb_day):
+                continue
+            if is_unavailable(a, rb_day, year, month):
+                continue
+            if exceeds_consecutive(plan, a.id, rb_day, ON_CALL_KINDS):
+                continue
+            if _violates_min_gap(plan, a, rb_day, rb_day, days_in_month):
+                continue
+            _add_entry(plan, rb_day, a.id, ShiftType.ON_CALL)
+            oncall_assigned[a.id] += 1
 
     # 4. Restliche Tage einzeln fuellen (VOLL fuer leere Tage,
     #    fehlende Haelfte fuer halb abgedeckte Tage)

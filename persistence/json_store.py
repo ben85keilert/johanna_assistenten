@@ -1,5 +1,4 @@
 from __future__ import annotations
-import json
 import sys
 from datetime import date
 from pathlib import Path
@@ -16,6 +15,7 @@ from .migrations import (
     CURRENT_TEAM_VERSION,
     CURRENT_PLAN_VERSION,
 )
+from .atomic_io import DataFileError, read_json, write_json
 
 
 def _base_dir() -> Path:
@@ -194,14 +194,15 @@ def save(plan: MonthPlan, path: str | Path) -> None:
         "created_at": plan.created_at,
         "modified_at": plan.modified_at,
     }
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
+    write_json(path, data)
 
 
 def load(path: str | Path) -> MonthPlan:
     path = Path(path)
-    with open(path, "r", encoding="utf-8") as f:
-        data = migrate_plan(json.load(f))
+    raw = read_json(path)
+    if raw is None:
+        raise DataFileError(path, "Datei nicht gefunden")
+    data = migrate_plan(raw)
 
     assistants = []
     for a_data in data.get("assistants", []):
@@ -255,16 +256,14 @@ def save_team(assistants: list[Assistant],
         ],
         "profiles": [_profile_to_dict(p) for p in profiles],
     }
-    with open(TEAM_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
+    write_json(TEAM_FILE, data)
 
 
 def load_team() -> list[Assistant]:
-    if not TEAM_FILE.exists():
+    raw = read_json(TEAM_FILE)
+    if raw is None:
         return []
-
-    with open(TEAM_FILE, "r", encoding="utf-8") as f:
-        data = migrate_team(json.load(f))
+    data = migrate_team(raw)
 
     assistants = []
     for a_data in data.get("assistants", []):
@@ -288,11 +287,10 @@ def load_profiles() -> list[SettingsProfile]:
     """Laedt die zwei Einstellungs-Vorlagen aus team.json (immer genau
     zwei; fehlende werden mit leeren Vorlagen aufgefuellt)."""
     profiles = default_profiles()
-    if not TEAM_FILE.exists():
+    raw = read_json(TEAM_FILE)
+    if raw is None:
         return profiles
-
-    with open(TEAM_FILE, "r", encoding="utf-8") as f:
-        data = migrate_team(json.load(f))
+    data = migrate_team(raw)
 
     for i, p_data in enumerate(data.get("profiles", [])[:2]):
         if isinstance(p_data, dict):
@@ -307,7 +305,6 @@ def plan_path(year: int, month: int) -> Path:
 
 
 def save_plan(plan: MonthPlan) -> None:
-    PLANS_DIR.mkdir(parents=True, exist_ok=True)
     data = {
         "version": CURRENT_PLAN_VERSION,
         "year": plan.year,
@@ -330,8 +327,7 @@ def save_plan(plan: MonthPlan) -> None:
         "created_at": plan.created_at,
         "modified_at": plan.modified_at,
     }
-    with open(plan_path(plan.year, plan.month), "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
+    write_json(plan_path(plan.year, plan.month), data)
 
 
 def load_plan(year: int, month: int, assistants: list[Assistant]) -> MonthPlan | None:
@@ -340,12 +336,10 @@ def load_plan(year: int, month: int, assistants: list[Assistant]) -> MonthPlan |
     Max. Folge, Min. Block, Mindestabstand, RB-Anhang) kommen aus dem
     Schnappschuss der Monatsdatei. Alte Dateien kennen nur die Soll-Spanne -
     die uebrigen Felder behalten dann die Werte aus team.json."""
-    path = plan_path(year, month)
-    if not path.exists():
+    raw = read_json(plan_path(year, month))
+    if raw is None:
         return None
-
-    with open(path, "r", encoding="utf-8") as f:
-        data = migrate_plan(json.load(f))
+    data = migrate_plan(raw)
 
     settings_map = data.get("settings", {})
 

@@ -425,8 +425,10 @@ class PlanTab(QWidget):
         self.table.setRowCount(n * 2 + 2 if split else n)
 
         # Spaltenkoepfe: feste Spalten; Tages-Labels nur in der breiten
-        # Ansicht (geteilt uebernehmen das die grauen Kopf-Zeilen)
-        header_labels = ["Soll\nMin", "Soll\nMax", "Belegt\nV|VM|NM|RB"]
+        # Ansicht (geteilt uebernehmen das die grauen Kopf-Zeilen).
+        # Max steht links von Min: Max begrenzt Min, also wird es zuerst
+        # eingestellt (sonst zieht ein spaeter gesetztes Max das Min zurueck)
+        header_labels = ["Soll\nMax", "Soll\nMin", "Belegt\nV|VM|NM|RB"]
         for day in range(1, half + 1):
             header_labels.append("" if split else self._day_header(day))
         self.table.setHorizontalHeaderLabels(header_labels)
@@ -446,7 +448,7 @@ class PlanTab(QWidget):
         # Erste Haelfte (bzw. ganzer Monat)
         for i, assistant in enumerate(assistants):
             row = off + i
-            for col, field in ((0, "min"), (1, "max")):
+            for col, field in ((0, "max"), (1, "min")):
                 stepper = self._make_target_stepper(assistant, field)
                 self._target_spins[(assistant.id, field)] = stepper
                 self.table.setCellWidget(row, col, stepper)
@@ -475,10 +477,9 @@ class PlanTab(QWidget):
 
         header = self.table.horizontalHeader()
         header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        stepper_width = 2 * theme.STEPPER_BUTTON_W + 64
         for col in (0, 1):
             header.setSectionResizeMode(col, QHeaderView.ResizeMode.Fixed)
-            self.table.setColumnWidth(col, stepper_width)
+            self.table.setColumnWidth(col, theme.STEPPER_WIDTH)
         header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
         self.refresh_display()
 

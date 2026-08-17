@@ -1,8 +1,8 @@
 from __future__ import annotations
-import json
 from dataclasses import dataclass, asdict
 
 from .json_store import DATA_DIR
+from .atomic_io import DataFileError, read_json, write_json
 from .migrations import migrate_settings, CURRENT_SETTINGS_VERSION
 
 SETTINGS_FILE = DATA_DIR / "settings.json"
@@ -25,14 +25,15 @@ class AppSettings:
 
 
 def load_settings() -> AppSettings:
-    if not SETTINGS_FILE.exists():
-        return AppSettings()
-
+    # Anders als Team und Plan enthaelt diese Datei keine Nutzerdaten, nur
+    # Sitzungszustand - ist sie unrettbar kaputt, wird mit Defaults gestartet
     try:
-        with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
-            data = migrate_settings(json.load(f))
-    except (json.JSONDecodeError, OSError):
+        raw = read_json(SETTINGS_FILE)
+    except DataFileError:
+        raw = None
+    if raw is None:
         return AppSettings()
+    data = migrate_settings(raw)
 
     return AppSettings(
         last_year=data.get("last_year"),
@@ -46,7 +47,5 @@ def load_settings() -> AppSettings:
 
 
 def save_settings(settings: AppSettings) -> None:
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
     data = {"version": CURRENT_SETTINGS_VERSION, **asdict(settings)}
-    with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
+    write_json(SETTINGS_FILE, data)

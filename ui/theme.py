@@ -1,33 +1,41 @@
 """Zentrales Theme: Schrift- und Klickflaechen-Groessen an EINER Stelle.
 
 Das Programm gehoert nutzerfreundlich gestaltet (siehe BESCHREIBUNG.md):
-grosse, gut klickbare Bedienelemente, grosse Schrift, grosse Zeilen.
+gut klickbare Bedienelemente und lesbare Schrift - zugleich kompakt genug,
+dass ein ganzer Monat auf den Bildschirm passt.
 Wer die Oberflaeche vergroessern/verkleinern will, aendert die Werte hier.
 """
 from PySide6.QtGui import QFont
 
 # Grundschrift der ganzen Anwendung (Punkt)
-FONT_PT = 12
+FONT_PT = 10
 
 # Zeilenhoehe der Tabellen (Pixel)
-ROW_HEIGHT = 44
+ROW_HEIGHT = 32
 
 # Normale Buttons (Pixel)
-BUTTON_HEIGHT = 36
+BUTTON_HEIGHT = 28
 
 # Plus/Minus-Buttons der Stepper (nebeneinander, Pixel)
-STEPPER_BUTTON_W = 44
-STEPPER_BUTTON_H = 40
+STEPPER_BUTTON_W = 34
+STEPPER_BUTTON_H = 28
+# Wertanzeige zwischen den beiden Buttons
+STEPPER_VALUE_W = 40
+# Spaltenbreite fuer eine Tabellenzelle mit Stepper (Buttons + Wert + Raender)
+STEPPER_WIDTH = 2 * STEPPER_BUTTON_W + STEPPER_VALUE_W + 16
 
-# Zentrale Steuerleiste unter dem Menue: bewusst uebertrieben gross
-CONTROL_BAR_BUTTON_W = 96
-CONTROL_BAR_BUTTON_H = 64
-CONTROL_BAR_FONT_PT = 18
+# Mindestbreite einer Tagesspalte im Dienstplan
+DAY_COL_MIN_W = 44
+
+# Zentrale Steuerleiste unter dem Menue: bewusst groesser als der Rest
+CONTROL_BAR_BUTTON_W = 72
+CONTROL_BAR_BUTTON_H = 46
+CONTROL_BAR_FONT_PT = 14
 
 STYLESHEET = f"""
 QPushButton {{
     min-height: {BUTTON_HEIGHT}px;
-    padding: 4px 12px;
+    padding: 2px 8px;
 }}
 QPushButton:checked {{
     background-color: #2D7DD2;
@@ -38,23 +46,23 @@ QSpinBox, QDateEdit, QComboBox {{
 }}
 QSpinBox::up-button, QSpinBox::down-button,
 QDateEdit::up-button, QDateEdit::down-button {{
-    width: 30px;
+    width: 22px;
 }}
 QDateEdit::drop-down, QComboBox::drop-down {{
-    width: 34px;
+    width: 26px;
 }}
 QTabBar::tab {{
     min-height: {BUTTON_HEIGHT}px;
-    padding: 6px 24px;
+    padding: 4px 14px;
 }}
 QHeaderView::section {{
-    padding: 4px;
+    padding: 2px;
 }}
 QGroupBox {{
     border: 1px solid #9a9a9a;
-    border-radius: 8px;
-    margin-top: 10px;
-    padding: 4px 6px 2px 6px;
+    border-radius: 6px;
+    margin-top: 8px;
+    padding: 2px 4px 2px 4px;
 }}
 QGroupBox::title {{
     subcontrol-origin: margin;

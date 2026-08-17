@@ -41,6 +41,7 @@ class MainWindow(QMainWindow):
 
         self.team_tab = None
         self.plan_tab = None
+        self.absence_tab = None
 
         self.status_bar = QStatusBar()
         self.setStatusBar(self.status_bar)
@@ -48,8 +49,10 @@ class MainWindow(QMainWindow):
 
         # Menue wird in main.py verdrahtet
 
-        # Beim Schliessen speichert JohannaApp automatisch (siehe main.py)
-        self.on_close_save = None
+        # Beim Schliessen fragt/speichert JohannaApp (siehe main.py).
+        # Rueckgabe False = Schliessen abbrechen (Nutzer hat "Abbrechen"
+        # gewaehlt oder das Speichern ist fehlgeschlagen)
+        self.on_close_request = None
 
     def _steppers_in_current_tab(self) -> list[BigStepper]:
         current = self.tab_widget.currentWidget()
@@ -65,9 +68,11 @@ class MainWindow(QMainWindow):
         return sorted(steppers, key=position)
 
     def _register_top_bar(self, tab):
-        if hasattr(tab, "top_bar"):
-            self._corner_pages[tab] = tab.top_bar
-            self._corner_stack.addWidget(tab.top_bar)
+        # Tabs ohne eigene Kopfzeile bekommen eine leere Seite, damit in der
+        # Tab-Ecke nicht die Bedienelemente des vorigen Tabs stehen bleiben
+        page = getattr(tab, "top_bar", None) or QWidget()
+        self._corner_pages[tab] = page
+        self._corner_stack.addWidget(page)
         self._sync_corner_bar()
 
     def _sync_corner_bar(self, *_):
@@ -79,6 +84,11 @@ class MainWindow(QMainWindow):
         self.plan_tab = tab
         self.tab_widget.insertTab(0, tab, "Dienstplan")
         self.tab_widget.setCurrentIndex(0)
+        self._register_top_bar(tab)
+
+    def set_absence_tab(self, tab):
+        self.absence_tab = tab
+        self.tab_widget.addTab(tab, "Urlaub")
         self._register_top_bar(tab)
 
     def set_team_tab(self, tab):
@@ -103,6 +113,7 @@ class MainWindow(QMainWindow):
         self.update_window_title()
 
     def closeEvent(self, event):
-        if self.on_close_save is not None:
-            self.on_close_save()
+        if self.on_close_request is not None and not self.on_close_request():
+            event.ignore()
+            return
         event.accept()
