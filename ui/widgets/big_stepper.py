@@ -28,8 +28,8 @@ class BigStepper(QWidget):
         self._value = max(minimum, min(maximum, value))
 
         layout = QHBoxLayout()
-        layout.setContentsMargins(2, 2, 2, 2)
-        layout.setSpacing(4)
+        layout.setContentsMargins(1, 1, 1, 1)
+        layout.setSpacing(2)
 
         self.minus_btn = QPushButton("−")
         self.plus_btn = QPushButton("+")
@@ -41,7 +41,7 @@ class BigStepper(QWidget):
 
         self.value_label = QLabel()
         self.value_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.value_label.setMinimumWidth(52)
+        self.value_label.setMinimumWidth(theme.STEPPER_VALUE_W)
 
         self.minus_btn.clicked.connect(lambda: self.step(-1))
         self.plus_btn.clicked.connect(lambda: self.step(1))

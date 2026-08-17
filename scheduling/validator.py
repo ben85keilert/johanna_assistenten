@@ -119,6 +119,18 @@ def validate(plan: MonthPlan) -> list[Warning]:
         min_block = assistant.constraints.min_block_days
         max_block = assistant.constraints.max_consecutive_days
 
+        def presence_length(start: int, end: int) -> int:
+            """Laenge der zusammenhaengenden Anwesenheit um start..end herum -
+            Dienst und Rufbereitschaft zusammen. Wer die Rufbereitschaft an
+            den Dienstblock anhaengt (auch beidseitig), ist am Stueck vor Ort;
+            die kuerzeren Teilstuecke sind dann kein zu kurzer Einsatz."""
+            first, last = start, end
+            while first > 1 and _works_on(plan, assistant.id, first - 1):
+                first -= 1
+            while last < days_in_month and _works_on(plan, assistant.id, last + 1):
+                last += 1
+            return last - first + 1
+
         def check_runs(kinds, kind_label: str):
             day = 1
             while day <= days_in_month:
@@ -138,7 +150,8 @@ def validate(plan: MonthPlan) -> list[Warning]:
                         )
                     )
                 # Am Monatsanfang/-ende kann der Block im Nachbarmonat weitergehen
-                elif length < min_block and start > 1 and day - 1 < days_in_month:
+                elif (length < min_block and start > 1 and day - 1 < days_in_month
+                      and presence_length(start, day - 1) < min_block):
                     warnings.append(
                         Warning(
                             f"{assistant.name}: nur {length} Tag(e){kind_label} am Stueck "

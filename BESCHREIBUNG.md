@@ -51,11 +51,16 @@ Jeder Helfer hat eigene Vorgaben:
   Block). Die Termine werden dadurch gestreut. **Die Abstände sind ein Muss** —
   der Generator unterschreitet sie nie, auch nicht als Notlösung; im Zweifel
   bleibt ein Tag offen.
-- **Rufbereitschaft anhängen** („Vorher"/„Nachher", Standard: aus): die
+- **Rufbereitschaft anhängen** („Vorher"/„Nachher"/„Beides", Standard: aus): die
   Rufbereitschaft wird als gleich langer Block **direkt vor bzw. nach dem
   Dienstblock** eingeplant. Wichtig für Helfer mit langer Anreise, die am
   Stück vor Ort sein wollen (z. B. 3 Tage Dienst + 3 Tage Rufbereitschaft
-  hintereinander). Max. Folge zählt dabei weiter je Art getrennt.
+  hintereinander). **„Beides"** verteilt denselben Block auf beide Seiten — bei
+  4 Tagen Dienst also 2 Tage Rufbereitschaft davor und 2 danach (bei ungerader
+  Länge liegt der längere Teil hinten). Die **Gesamtzahl der angehängten
+  RB-Tage bleibt in allen Varianten so groß wie der Dienstblock**, damit die
+  Regel „so viele Rufbereitschaften wie Dienste" weiter aufgeht.
+  Max. Folge zählt dabei weiter je Art getrennt.
 - **Max. Tage am Stück** (1–7): mehr aufeinanderfolgende Diensttage sind nicht
   erlaubt. Gilt für Dienst **und** Rufbereitschaft, aber **je Art getrennt
   gezählt**: 3 Tage Dienst direkt gefolgt von 3 Tagen Rufbereitschaft sind zwei
@@ -83,23 +88,28 @@ Weitere Bedingungen (z. B. Wochenend-Fairness) folgen später und werden hier er
   das zuletzt angeklickte Wertefeld und ändert dessen Wert mit großen ▲/▼-Buttons;
   mit ◀/▶ springt man zum vorherigen/nächsten Wertefeld, ohne die Felder in der
   Tabelle treffen zu müssen.
-- Große Schrift und Zeilenhöhen. Alle Größen sind zentral im Theme
-  (`ui/theme.py`) einstellbar.
-- Änderungen sind sofort in beiden Tabs sichtbar — nichts muss doppelt gepflegt
+- Gut lesbare Schrift und Zeilenhöhen — aber **kompakt genug, dass ein ganzer
+  Monat auf den Bildschirm passt**. Alle Größen sind zentral im Theme
+  (`ui/theme.py`) einstellbar; dort wird auch nachjustiert, wenn der Platz nicht
+  reicht.
+- Änderungen sind sofort in allen Tabs sichtbar — nichts muss doppelt gepflegt
   werden.
 
 ## Bedienkonzept
 
-Zwei Tabs:
+Drei Tabs:
 
 1. **Dienstplan-Tab**: Monatsraster (Zeile = Helfer, Spalte = Tag).
    - **Zwei Ansichten** (umschaltbar, wird gemerkt): *Breit* (der ganze Monat in
      einer Zeile) oder *Zweigeteilt* (zweite Monatshälfte unter der ersten — man
      scrollt vertikal statt horizontal).
-   - Neben dem Namen stehen pro Helfer die **Soll-Dienste als Min/Max-Spanne**
+   - Neben dem Namen stehen pro Helfer die **Soll-Dienste als Max/Min-Spanne**
      (zwei Spalten mit Minus/Plus-Buttons, „Auto" = keine Grenze bzw. gleichmäßig
      verteilen; Min ≤ Max hält sich automatisch konsistent) und die **belegten
      Dienste** als Tupel `VOLL | VM | NM | RB`.
+     **Max steht links, Min rechts daneben** — Max begrenzt Min, wird also zuerst
+     eingestellt. Andersherum zöge ein danach gesetztes Max das gerade erhöhte
+     Min wieder zurück. Dieselbe Reihenfolge gilt in den Vorlagen des Team-Tabs.
    - **Stempel-Buttons**: Tagesdienst | VM | NM | Rufbereitschaft | Urlaub |
      Block | Fixieren | Löschen.
      Ein aktiver Stempel wird per Klick auf eine Zelle angewendet; erneuter Klick
@@ -111,15 +121,37 @@ Zwei Tabs:
    - **Mehrfachauswahl**: mit Strg/Shift lassen sich mehrere Zellen (auch verstreut)
      markieren; das Rechtsklick-Menü wirkt dann auf alle markierten Zellen.
    - **Urlaub und Block** im Raster: zusammenhängend gestempelte Tage werden
-     automatisch zu Zeiträumen zusammengefasst und erscheinen in der
-     Abwesenheitsübersicht des Team-Tabs; Einzeltage bleiben Einzeltage. Wird ein
+     automatisch zu Zeiträumen zusammengefasst und erscheinen im Urlaub-Tab;
+     Einzeltage bleiben Einzeltage. Wird ein
      Tag mitten aus einem Zeitraum wieder entfernt, teilt sich der Zeitraum
      entsprechend. Im Raster erscheint Urlaub als graues **„U"**, Block als
      graues **„X"**.
    - Unter dem Raster: Zusammenfassung pro Helfer als Tupel `Name (VOLL|VM|NM|RB)`
      mit Legende sowie Warnhinweise (unbesetzte/halbe Tage, Tage ohne
      Rufbereitschaft, Zielabweichungen, Abweichungen Rufbereitschaft/Dienste).
-2. **Team-Tab**: Links die Helferliste (anlegen/entfernen, Name und Farbe) in
+2. **Urlaub-Tab**: alles rund um Abwesenheiten an einer Stelle — bewusst
+   übersichtlicher als das Dienstplan-Raster, weil es hier nur zwei Arten gibt.
+   In der Tab-Zeile: **Monat**, **Person** sowie die Listenfilter „Nur dieser
+   Monat" und „Vergangene anzeigen".
+   - **Links ein Monatskalender** in Wochenform (Spalten Mo–So, Zeilen =
+     Kalenderwochen). Ist oben eine Person gewählt, zeigt er deren Abwesenheiten:
+     **grün = Urlaub, rot = Block**, der heutige Tag ist fett. Bei „Alle Helfer"
+     stehen in jedem Tag die betroffenen Namen (`U`/`B` davor) — zum Einsehen,
+     wer wann weg ist.
+   - **Eintragen** wie im Dienstplan über Stempel: **Urlaub | Block | Löschen**.
+     Klick auf einen Tag setzt bzw. entfernt ihn wieder; Urlaub und Block
+     schließen sich gegenseitig aus. Mehrere Tage lassen sich mit Strg/Shift
+     markieren und per Rechtsklick gemeinsam setzen oder räumen. Eingetragen wird
+     immer für die oben gewählte Person (bei „Alle Helfer" weist ein Hinweis
+     darauf hin).
+   - **Rechts die Abwesenheitsübersicht**: alle Abwesenheiten chronologisch —
+     Zeiträume **und Einzeltage**, Urlaub und Block (Block-Einträge mit
+     `[Block]` gekennzeichnet), monatsübergreifend. Hinzufügen, **Bearbeiten**
+     (Button oder Doppelklick) und Entfernen über Dialoge mit
+     Kalender-Datumsfeldern und Art-Auswahl; überlappende oder angrenzende
+     Zeiträume verschmelzen automatisch. Ein Klick auf einen Listeneintrag
+     springt im Kalender auf dessen Monat.
+3. **Team-Tab**: die Helferliste (anlegen/entfernen, Name und Farbe) in
    **zwei Vorlagen-Tabs** („Vorlage 1"/„Vorlage 2"): jede Vorlage hält einen
    kompletten Satz Einstellungen je Helfer — **Min./Max. Dienste, Max. Folge,
    Min. Block, Abstand (Mindestabstand) und RB anhängen** — direkt in der
@@ -129,17 +161,9 @@ Zwei Tabs:
    Vorlage in den aktuell geöffneten Monat. So lassen sich zwei verschiedene
    Konstellationen vorbereiten und je nach Monat in den Dienstplan migrieren;
    jeder Monat merkt sich die übernommenen Einstellungen selbst. Name und
-   Farbe gelten dagegen immer sofort und in beiden Vorlagen. Einzelne
-   Abwesenheitstage stempelt man direkt im Planraster (Urlaub- oder
-   Block-Stempel). Rechts daneben die
-   **Abwesenheitsübersicht**: alle Abwesenheiten aller Helfer chronologisch
-   sortiert — Zeiträume **und Einzeltage**, Urlaub und Block (Block-Einträge sind
-   mit `[Block]` gekennzeichnet), monatsübergreifend. Hinzufügen, **Bearbeiten**
-   (Button oder Doppelklick) und Entfernen über Dialoge mit Kalender-Datumsfeldern
-   und Art-Auswahl (Urlaub/Block); überlappende oder angrenzende Zeiträume
-   verschmelzen automatisch. In der Tab-Zeile (solange der Team-Tab aktiv ist):
-   **Filter** nach Person und Monat sowie „Vergangene anzeigen" — abgelaufene
-   Abwesenheiten sind standardmäßig ausgeblendet.
+   Farbe gelten dagegen immer sofort und in beiden Vorlagen. **Abwesenheiten
+   gehören nicht hierher** — sie haben ihren eigenen Tab (siehe oben) und
+   lassen sich zusätzlich direkt im Planraster stempeln.
 
 ### Generier-Zyklus: Fixieren und Neuwürfeln
 
@@ -172,9 +196,34 @@ als Warnung unter dem Raster — das ist gewollt, nicht kaputt.
 
 ## Datenhaltung
 
-Alle Daten liegen als **JSON** im Ordner `data/` neben dem Programm. Das Programm
-speichert beim Beenden automatisch und stellt beim Start den letzten Zustand wieder
-her (zuletzt geöffneter Monat, Fenstergröße).
+Alle Daten liegen als **JSON** im Ordner `data/` neben dem Programm. Beim Start wird
+der letzte Zustand wiederhergestellt (zuletzt geöffneter Monat, Fenstergröße).
+
+### Automatisches Speichern & Datensicherheit
+
+**Es darf keine Arbeit verloren gehen — auch nicht bei Absturz oder Stromausfall.**
+Dafür sorgen vier Dinge:
+
+- **Autosave alle 15 Sekunden**: Sobald es ungespeicherte Änderungen gibt, schreibt
+  das Programm sie automatisch weg (Statuszeile: „Automatisch gespeichert (hh:mm:ss)").
+  Ein Absturz kostet damit höchstens die letzten Sekunden. Zusätzlich wird beim
+  Monatswechsel und beim Beenden gespeichert, `Strg+S` speichert jederzeit von Hand.
+- **Nachfrage beim Beenden**: Wird das Fenster geschlossen, während noch Änderungen
+  offen sind (also innerhalb der 15 Sekunden bis zum nächsten Autosave), fragt das
+  Programm: *Speichern und beenden* / *Ohne Speichern beenden* / *Abbrechen*. Ohne
+  offene Änderungen erscheint keine Rückfrage. Scheitert das Speichern, wird der
+  Fehler gezeigt und man kann zum Plan zurück, statt die Daten zu verlieren.
+  Beim Abmelden oder Herunterfahren (SIGTERM/SIGINT) speichert das Programm noch
+  selbstständig. Nur ein hartes Abschießen (Task-Manager, Stromausfall) lässt sich
+  nicht abfangen — dagegen schützt der 15-Sekunden-Autosave.
+- **Atomares Schreiben mit Sicherungskopie**: Jede Datei wird zuerst vollständig als
+  `*.tmp` geschrieben und dann in einem Zug an ihren Platz verschoben; die bisherige
+  Fassung bleibt als `*.bak` daneben liegen. So gibt es zu jedem Zeitpunkt eine heile
+  Datei — ein Absturz mitten im Speichern kann den alten Stand nicht mehr zerstören.
+- **Beschädigte Dateien**: Ist eine Datei unlesbar, greift das Programm automatisch
+  auf ihre `*.bak`-Kopie zurück und weist darauf hin. Sind beide beschädigt, startet
+  es **nicht** mit leeren Daten, sondern bricht mit einer Meldung ab — damit die
+  kaputte Datei nicht auch noch überschrieben wird.
 
 ### `data/team.json` — das Team (monatsübergreifend)
 

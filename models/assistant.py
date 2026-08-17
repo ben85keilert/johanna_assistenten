@@ -21,8 +21,9 @@ class AssistantConstraints:
     # Harte Regel: der Generator unterschreitet den Abstand nie
     min_gap_days: int = 0
     # Rufbereitschaft als Block direkt an den Dienstblock anhaengen
-    # ("before" = davor, "after" = danach, "none" = aus) - fuer Helfer mit
-    # weiter Anreise, die am Stueck vor Ort sein wollen
+    # ("before" = davor, "after" = danach, "both" = auf beide Seiten
+    # aufgeteilt, "none" = aus) - fuer Helfer mit weiter Anreise, die am
+    # Stueck vor Ort sein wollen
     oncall_attach: str = "none"
     # Soll-Dienste als Spanne; None = "Auto" (gleichmaessig verteilen)
     min_shifts: int | None = None

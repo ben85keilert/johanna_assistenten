@@ -10,3 +10,6 @@ build/
 .claude/
 *.stackdump
 .env
+# Sicherungs-/Zwischendateien des atomaren Speicherns
+*.bak
+*.tmp
