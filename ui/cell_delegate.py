@@ -6,27 +6,44 @@ from PySide6.QtGui import QPainter, QColor, QFont, QPen
 
 from models import ShiftType
 from scheduling.engine import is_on_vacation, is_blocked
+from persistence import AppSettings
 from . import theme
 
 WEEKEND_COLOR = QColor(235, 235, 235)
-UNAVAILABLE_COLOR = QColor(200, 200, 200)
 SHIFT_LABELS = {
     ShiftType.FULL: "VOLL",
     ShiftType.HALF_MORNING: "VM",
     ShiftType.HALF_AFTERNOON: "NM",
     ShiftType.ON_CALL: "RB",
 }
+# Schluessel in AppSettings.entry_colors je Dienstart
+SHIFT_COLOR_KEYS = {
+    ShiftType.FULL: "FULL",
+    ShiftType.HALF_MORNING: "HALF_MORNING",
+    ShiftType.HALF_AFTERNOON: "HALF_AFTERNOON",
+    ShiftType.ON_CALL: "ON_CALL",
+}
+# Deckkraft nicht fixierter (gewuerfelter) Eintraege
+GENERATED_ALPHA = 110
 
 
 class CellDelegate(QStyledItemDelegate):
-    """Zeichnet die Planzellen direkt aus den Plandaten:
-    Helferfarbe (heller + Punkt bei Zufallseintraegen), Schloss bei fixierten,
-    grau mit "U" bei Urlaub bzw. "X" bei Block, Wochenend-Grau."""
+    """Zeichnet die Planzellen direkt aus den Plandaten.
 
-    def __init__(self, plan_provider, parent=None):
+    Farblogik: jede Eintragsart (VOLL/VM/NM/RB/Urlaub/Block) hat ihre eigene,
+    unter Einstellungen > Farben waehlbare Farbe. Feste Eintraege (von Hand
+    gesetzt oder fixiert) sind kraeftig gefaerbt; noch in Planung befindliche
+    (gewuerfelt, nicht fixiert) erscheinen transparent und tragen einen Punkt.
+    Fixierte tragen ein Schloss, Urlaub ein "U", Block ein "X"."""
+
+    def __init__(self, plan_provider, settings: AppSettings, parent=None):
         super().__init__(parent)
         # Callable statt Referenz, damit Monatswechsel automatisch greift
         self.plan_provider = plan_provider
+        self.settings = settings
+
+    def _entry_color(self, key: str) -> QColor:
+        return QColor(self.settings.entry_colors.get(key, "#9E9E9E"))
 
     def paint(self, painter: QPainter, option: QStyleOptionViewItem, index):
         plan = self.plan_provider()
@@ -48,23 +65,22 @@ class CellDelegate(QStyledItemDelegate):
             and assistant is not None
             and is_blocked(assistant, day, plan.year, plan.month)
         )
-        unavailable = vacation or blocked
         weekend = date(plan.year, plan.month, day).weekday() >= 5
 
         painter.save()
 
-        # Hintergrund: fixierte Eintraege kraeftig, nicht fixierte blasser
-        if entry is not None and assistant is not None:
-            background = QColor(assistant.color)
-            if not entry.locked:
-                background = background.lighter(150)
-        elif unavailable:
-            background = UNAVAILABLE_COLOR
-        elif weekend:
-            background = WEEKEND_COLOR
-        else:
-            background = QColor(255, 255, 255)
-        painter.fillRect(option.rect, background)
+        # Grundflaeche (weiss bzw. Wochenend-Grau), darueber die Typfarbe:
+        # voll deckend bei festen Eintraegen, transparent bei gewuerfelten
+        painter.fillRect(option.rect, WEEKEND_COLOR if weekend else QColor(255, 255, 255))
+        if entry is not None:
+            overlay = self._entry_color(SHIFT_COLOR_KEYS.get(entry.shift_type, ""))
+            if entry.generated and not entry.locked:
+                overlay.setAlpha(GENERATED_ALPHA)
+            painter.fillRect(option.rect, overlay)
+        elif vacation:
+            painter.fillRect(option.rect, self._entry_color("VACATION"))
+        elif blocked:
+            painter.fillRect(option.rect, self._entry_color("BLOCK"))
 
         # Text
         text = ""

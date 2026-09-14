@@ -20,6 +20,7 @@ from models import (
     Assistant, MonthPlan,
     absence_days, set_absence_days, blocked_days, set_blocked_days,
 )
+from persistence import AppSettings
 from datetime import date, timedelta
 import calendar
 
@@ -33,9 +34,7 @@ STAMP_VACATION = "urlaub"
 STAMP_BLOCK = "block"
 STAMP_CLEAR = "clear"
 
-VACATION_COLOR = QColor(200, 230, 201)   # gruen  = Urlaub
-BLOCK_COLOR = QColor(255, 205, 210)      # rot    = Block
-MIXED_COLOR = QColor(224, 224, 224)      # beides (nur in der Alle-Ansicht)
+MIXED_COLOR = QColor(224, 224, 224)      # Urlaub+Block (nur in der Alle-Ansicht)
 OUTSIDE_COLOR = QColor(245, 245, 245)    # Tag gehoert nicht zum Monat
 WEEKEND_COLOR = QColor(235, 235, 235)
 
@@ -44,9 +43,11 @@ class AbsenceTab(QWidget):
     # Abwesenheiten geaendert -> Plan neu zeichnen und als geaendert markieren
     absences_changed = Signal()
 
-    def __init__(self, parent=None):
+    def __init__(self, settings: AppSettings, parent=None):
         super().__init__(parent)
         self.plan: MonthPlan | None = None
+        # Urlaub-/Block-Farbe kommen aus Einstellungen > Farben
+        self.settings = settings
         self.year = date.today().year
         self.month = date.today().month
         self.active_stamp: str | None = None
@@ -143,11 +144,9 @@ class AbsenceTab(QWidget):
         )
         calendar_layout.addWidget(self.calendar)
 
-        self.legend_label = QLabel(
-            "Gruen = Urlaub    Rot = Block    "
-            "Mehrfachauswahl mit Strg/Shift, dann Rechtsklick"
-        )
+        self.legend_label = QLabel()
         calendar_layout.addWidget(self.legend_label)
+        self._update_legend()
 
         calendar_group.setLayout(calendar_layout)
         layout.addWidget(calendar_group, stretch=3)
@@ -191,6 +190,22 @@ class AbsenceTab(QWidget):
         self._refresh_person_combo()
         self.refresh_calendar()
         self.refresh_list()
+
+    def _vacation_color(self) -> QColor:
+        return QColor(self.settings.entry_colors.get("VACATION", "#81C784"))
+
+    def _block_color(self) -> QColor:
+        return QColor(self.settings.entry_colors.get("BLOCK", "#E57373"))
+
+    def _update_legend(self):
+        # Farbige Kaestchen in der Legende folgen den eingestellten Farben
+        self.legend_label.setText(
+            f'<span style="background-color:{self._vacation_color().name()};">'
+            "&nbsp;&nbsp;&nbsp;</span> Urlaub &nbsp;&nbsp; "
+            f'<span style="background-color:{self._block_color().name()};">'
+            "&nbsp;&nbsp;&nbsp;</span> Block &nbsp;&nbsp; "
+            "Mehrfachauswahl mit Strg/Shift, dann Rechtsklick"
+        )
 
     # --- Kopfzeile ------------------------------------------------------
 
@@ -366,9 +381,9 @@ class AbsenceTab(QWidget):
         person = self._selected_assistant()
         if person is not None:
             if d in absence_days(person.constraints):
-                return VACATION_COLOR, ["Urlaub"]
+                return self._vacation_color(), ["Urlaub"]
             if d in blocked_days(person.constraints):
-                return BLOCK_COLOR, ["Block"]
+                return self._block_color(), ["Block"]
             return None, []
 
         lines, has_vacation, has_block = [], False, False
@@ -384,7 +399,7 @@ class AbsenceTab(QWidget):
         if has_vacation and has_block:
             color = MIXED_COLOR
         else:
-            color = VACATION_COLOR if has_vacation else BLOCK_COLOR
+            color = self._vacation_color() if has_vacation else self._block_color()
         return color, lines
 
     def refresh_calendar(self):
@@ -438,6 +453,7 @@ class AbsenceTab(QWidget):
         self.calendar.setVerticalHeaderLabels(week_labels)
 
         self._building = False
+        self._update_legend()
         self._update_hint()
 
     # --- Liste ----------------------------------------------------------

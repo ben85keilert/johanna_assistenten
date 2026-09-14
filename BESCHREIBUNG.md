@@ -124,8 +124,15 @@ Drei Tabs:
      automatisch zu Zeiträumen zusammengefasst und erscheinen im Urlaub-Tab;
      Einzeltage bleiben Einzeltage. Wird ein
      Tag mitten aus einem Zeitraum wieder entfernt, teilt sich der Zeitraum
-     entsprechend. Im Raster erscheint Urlaub als graues **„U"**, Block als
-     graues **„X"**.
+     entsprechend. Im Raster erscheint Urlaub als **„U"**, Block als **„X"**,
+     jeweils in der Farbe der Eintragsart (siehe Farbmanagement unten).
+   - **Tagesnotizen**: Zu jedem Tag lässt sich eine Freitext-Notiz hinterlegen
+     (Stempel **„Notiz"** + Klick auf eine Zelle des Tages, oder Rechtsklick →
+     „Notiz für Tag … bearbeiten…"). Tage mit Notiz tragen im Tageskopf ein
+     **Notizsymbol (📝)**; der Text erscheint als Tooltip auf dem Tageskopf
+     und in einer **Notizzeile unter dem Raster**, sobald eine Zelle des Tages
+     angeklickt ist. Der Dialog bearbeitet die Notiz mehrzeilig; leerer Text
+     löscht sie.
    - Unter dem Raster: Zusammenfassung pro Helfer als Tupel `Name (VOLL|VM|NM|RB)`
      mit Legende sowie Warnhinweise (unbesetzte/halbe Tage, Tage ohne
      Rufbereitschaft, Zielabweichungen, Abweichungen Rufbereitschaft/Dienste).
@@ -134,8 +141,10 @@ Drei Tabs:
    In der Tab-Zeile: **Monat**, **Person** sowie die Listenfilter „Nur dieser
    Monat" und „Vergangene anzeigen".
    - **Links ein Monatskalender** in Wochenform (Spalten Mo–So, Zeilen =
-     Kalenderwochen). Ist oben eine Person gewählt, zeigt er deren Abwesenheiten:
-     **grün = Urlaub, rot = Block**, der heutige Tag ist fett. Bei „Alle Helfer"
+     Kalenderwochen). Ist oben eine Person gewählt, zeigt er deren Abwesenheiten
+     in den unter **Einstellungen → Farben…** gewählten Urlaub-/Block-Farben
+     (Standard: grün = Urlaub, rot = Block; die Legende unter dem Kalender
+     zeigt die aktuellen Farben), der heutige Tag ist fett. Bei „Alle Helfer"
      stehen in jedem Tag die betroffenen Namen (`U`/`B` davor) — zum Einsehen,
      wer wann weg ist.
    - **Eintragen** wie im Dienstplan über Stempel: **Urlaub | Block | Löschen**.
@@ -173,8 +182,15 @@ Drei Tabs:
 2. **Neu würfeln** füllt die restlichen Tage zufällig, unter Beachtung aller
    Regeln. Zufällig vergebene Dienste tragen einen **Punkt**.
 3. Was gefällt, **fixiert** man per Klick (Fixieren-Stempel oder Rechtsklick).
-   **Farblogik: fixierte Einträge sind kräftig gefärbt und tragen ein Schloss,
-   nicht fixierte sind blasser.**
+   **Farblogik (Farbmanagement): nicht die Helfer, sondern die Eintragsarten
+   tragen die Farbe** — VOLL, VM, NM, RB, Urlaub und Block haben je eine
+   einheitliche, unter **Einstellungen → Farben…** einstellbare Farbe (mit
+   Vorschau und „Standardfarben"-Reset). **Feste Einträge (von Hand gesetzt
+   oder fixiert) sind kräftig/voll gefärbt; noch in Planung befindliche
+   (gewürfelt, nicht fixiert) erscheinen transparenter** und tragen
+   zusätzlich einen Punkt, fixierte ein Schloss. Die Helferfarbe aus dem
+   Team-Tab dient weiter der Wiedererkennung in Listen, Auswahlfeldern und
+   Exporten.
    „Deterministisch" bedeutet: Mit gleichem Seed und gleichen Fixpunkten liefert
    „Generieren" immer denselben Plan (reproduzierbar); ohne Häkchen würfelt jeder
    Klick anders.
@@ -208,6 +224,11 @@ Dafür sorgen vier Dinge:
   das Programm sie automatisch weg (Statuszeile: „Automatisch gespeichert (hh:mm:ss)").
   Ein Absturz kostet damit höchstens die letzten Sekunden. Zusätzlich wird beim
   Monatswechsel und beim Beenden gespeichert, `Strg+S` speichert jederzeit von Hand.
+  **Datei → Speichern unter… (`Strg+Umschalt+S`)** legt darüber hinaus eine frei
+  benannte **Kopie** des aktuellen Plans (samt Team) an beliebiger Stelle ab —
+  z. B. als Planvariante oder zur Weitergabe; sie lässt sich über
+  „Plan-Datei öffnen…" wieder laden. Die automatische Ablage unter
+  `data/plans/` läuft davon unabhängig weiter.
 - **Nachfrage beim Beenden**: Wird das Fenster geschlossen, während noch Änderungen
   offen sind (also innerhalb der 15 Sekunden bis zum nächsten Autosave), fragt das
   Programm: *Speichern und beenden* / *Ohne Speichern beenden* / *Abbrechen*. Ohne
@@ -274,7 +295,7 @@ Vorlage) für diesen Monat übernommen wurde:
 
 ```json
 {
-  "version": 5,
+  "version": 6,
   "year": 2026,
   "month": 9,
   "schedule": {
@@ -283,6 +304,7 @@ Vorlage) für diesen Monat übernommen wurde:
            { "assistant_id": "8cdf0de4", "shift_type": "ON_CALL",
              "locked": false, "generated": true } ]
   },
+  "notes": { "3": "Arzttermin 10 Uhr" },
   "settings": {
     "f6164e36": { "min": 3, "max": 6, "max_consecutive_days": 1,
                   "min_block_days": 1, "min_gap_days": 0,
@@ -297,8 +319,9 @@ Aus Version 4 migrierte Monatsdateien kennen nur die Soll-Spanne (`min`/`max`);
 die übrigen Felder kommen dann weiterhin aus `team.json`.
 
 - `locked`: fixiert — übersteht das Neuwürfeln.
-- `generated`: wurde vom Zufallsgenerator vergeben (farblich markiert), nicht von Hand.
+- `generated`: wurde vom Zufallsgenerator vergeben (transparenter dargestellt), nicht von Hand.
 - `shift_type: "ON_CALL"`: Rufbereitschaft (im Raster als „RB").
+- `notes`: Freitext-Notiz je Tag (Tag → Text); leere Notizen werden nicht gespeichert.
 
 In den CSV-/Excel-/PDF-Exporten hat die Zusammenfassung eine eigene **RB**-Spalte;
 „Dienste gesamt" ist die gewichtete Dienstzahl (VOLL = 1, VM/NM = 0,5, ohne RB).
@@ -307,14 +330,22 @@ In den CSV-/Excel-/PDF-Exporten hat die Zusammenfassung eine eigene **RB**-Spalt
 
 ```json
 {
-  "version": 3,
+  "version": 4,
   "last_year": 2026, "last_month": 8,
   "window_geometry": "…",
   "allow_overwrite": false,
   "seed": 42, "deterministic": true,
-  "split_view": false
+  "split_view": false,
+  "entry_colors": {
+    "FULL": "#5B9BD5", "HALF_MORNING": "#4DB6AC",
+    "HALF_AFTERNOON": "#F2A54A", "ON_CALL": "#9575CD",
+    "VACATION": "#81C784", "BLOCK": "#E57373"
+  }
 }
 ```
+
+- `entry_colors`: die unter **Einstellungen → Farben…** gewählte Farbe je
+  Eintragsart (fehlende Arten erhalten beim Laden die Standardfarbe).
 
 ## Updatefähigkeit & Migration
 
@@ -339,6 +370,13 @@ Dateien nachvollziehbar ist und als Beispielvorlage zum Ausprobieren dient.
 
 ## Ausblick (nur notiert, noch nicht umgesetzt)
 
+- **Prioritäten im Plan (Stufe 2)**: mehrere Kandidaten je Tag für
+  Dienst/Rufbereitschaft (ein einzelner manueller Volleintrag bleibt fix,
+  bei mehreren wird gewählt), Freiwunsch-Kontingente mit Vorrang/Nachrang
+  (Wünsche über der vorgegebenen Blockzahl haben Nachrang) und ein
+  Konflikt-Dialog beim Würfeln, wenn Wünsche nicht erfüllbar sind — Urlaube
+  bleiben zwingend, Wünsche nicht. Die bisherige Vergabelogik ist als
+  Grundlage dafür in **`PLANUNGSLOGIK.md`** schematisiert.
 - **Serverbetrieb**: Später soll das Programm über einen Server laufen. Die
   Assistenten können sich dann selbst einloggen und ihre Urlaube bzw. freien Tage
   eintragen.

@@ -39,7 +39,7 @@ class JohannaApp:
         self.team_tab = TeamTab()
         self.team_tab.set_profiles(self.profiles)
         self.plan_tab = PlanTab(self.settings)
-        self.absence_tab = AbsenceTab()
+        self.absence_tab = AbsenceTab(self.settings)
 
         self.window.set_plan_tab(self.plan_tab)
         self.window.set_absence_tab(self.absence_tab)
@@ -136,6 +136,11 @@ class JohannaApp:
         save_action.triggered.connect(self.save_all)
         file_menu.addAction(save_action)
 
+        save_as_action = QAction("Speichern unter...", self.window)
+        save_as_action.setShortcut("Ctrl+Shift+S")
+        save_as_action.triggered.connect(self.save_plan_as)
+        file_menu.addAction(save_as_action)
+
         export_menu = file_menu.addMenu("Exportieren")
         for label, handler in [
             ("CSV", self.export_csv),
@@ -151,6 +156,11 @@ class JohannaApp:
         exit_action = QAction("Beenden", self.window)
         exit_action.triggered.connect(self.window.close)
         file_menu.addAction(exit_action)
+
+        settings_menu = menubar.addMenu("Einstellungen")
+        colors_action = QAction("Farben...", self.window)
+        colors_action.triggered.connect(self.open_color_settings)
+        settings_menu.addAction(colors_action)
 
     def load_plan_to_ui(self):
         self.team_tab.set_plan(self.plan)
@@ -266,6 +276,43 @@ class JohannaApp:
 
     def save_all(self):
         self._save_current_guarded(update_status=True)
+
+    def save_plan_as(self):
+        """Speichert den aktuellen Plan als frei benannte Datei (Kopie).
+
+        Die Datei enthaelt den vollstaendigen Plan samt Team und laesst sich
+        ueber "Plan-Datei oeffnen..." wieder laden. Die normale Ablage unter
+        data/plans/ laeuft davon unabhaengig weiter.
+        """
+        suggested = f"plan_{self.plan.year}_{self.plan.month:02d}.json"
+        path, _ = QFileDialog.getSaveFileName(
+            self.window, "Plan speichern unter", suggested,
+            "JSON-Dateien (*.json)",
+        )
+        if not path:
+            return
+        if not path.lower().endswith(".json"):
+            path += ".json"
+        try:
+            save(self.plan, path)
+        except Exception as e:
+            self._report_save_error(e, "Speichern unter", force_dialog=True)
+            return
+        self.window.status_bar.showMessage(f"Gespeichert unter: {path}")
+
+    def open_color_settings(self):
+        """Einstellungen > Farben: Farbe je Eintragsart aendern."""
+        from ui.color_settings_dialog import ColorSettingsDialog
+        dialog = ColorSettingsDialog(self.settings, self.window)
+        if not dialog.exec():
+            return
+        # Sofort anwenden und die Auswahl dauerhaft merken
+        self.plan_tab.refresh_display()
+        self.absence_tab.refresh_calendar()
+        try:
+            save_settings(self.settings)
+        except Exception as e:
+            self._report_save_error(e, "Speichern der Einstellungen")
 
     def _save_settings(self):
         self.settings.last_year = self.plan.year

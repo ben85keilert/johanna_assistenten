@@ -167,6 +167,19 @@ def _schedule_from_dict(data: dict) -> dict[int, list[ShiftEntry]]:
     }
 
 
+def _notes_to_dict(notes: dict[int, str]) -> dict:
+    # Leere Notizen fallen beim Speichern weg
+    return {str(day): text for day, text in notes.items() if text.strip()}
+
+
+def _notes_from_dict(data: dict) -> dict[int, str]:
+    return {
+        int(day_str): text
+        for day_str, text in data.items()
+        if isinstance(text, str) and text.strip()
+    }
+
+
 def _assistant_to_dict(a: Assistant, with_constraints: bool) -> dict:
     result = {
         "id": a.id,
@@ -189,6 +202,7 @@ def save(plan: MonthPlan, path: str | Path) -> None:
         "year": plan.year,
         "month": plan.month,
         "schedule": _schedule_to_dict(plan.schedule),
+        "notes": _notes_to_dict(plan.notes),
         "assistants": [_assistant_to_dict(a, with_constraints=True) for a in plan.assistants],
         "seed": plan.seed,
         "created_at": plan.created_at,
@@ -223,6 +237,7 @@ def load(path: str | Path) -> MonthPlan:
         year=data.get("year", 2026),
         month=data.get("month", 1),
         schedule=_schedule_from_dict(data.get("schedule", {})),
+        notes=_notes_from_dict(data.get("notes", {})),
         assistants=assistants,
         seed=data.get("seed"),
         created_at=data.get("created_at", ""),
@@ -310,6 +325,7 @@ def save_plan(plan: MonthPlan) -> None:
         "year": plan.year,
         "month": plan.month,
         "schedule": _schedule_to_dict(plan.schedule),
+        "notes": _notes_to_dict(plan.notes),
         # Schnappschuss der Planungs-Einstellungen dieses Monats (z. B. aus
         # einer Vorlage uebernommen); Abwesenheiten liegen weiter in team.json
         "settings": {
@@ -386,6 +402,7 @@ def load_plan(year: int, month: int, assistants: list[Assistant]) -> MonthPlan |
         year=year,
         month=month,
         schedule=_schedule_from_dict(data.get("schedule", {})),
+        notes=_notes_from_dict(data.get("notes", {})),
         assistants=assistants,
         seed=data.get("seed"),
         created_at=data.get("created_at", ""),
