@@ -2,7 +2,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QTableWidget,
     QTableWidgetItem, QLabel, QSpinBox, QCheckBox, QMessageBox,
     QHeaderView, QMenu, QAbstractItemView, QButtonGroup, QComboBox,
-    QGroupBox
+    QGroupBox, QDialog, QPlainTextEdit
 )
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QFont
@@ -29,8 +29,12 @@ STAMP_NM = "nm"
 STAMP_ONCALL = "oncall"
 STAMP_VACATION = "vacation"
 STAMP_BLOCK = "block"
+STAMP_NOTE = "note"
 STAMP_LOCK = "lock"
 STAMP_DELETE = "delete"
+
+# Notizsymbol im Tageskopf, wenn eine Notiz vorhanden ist
+NOTE_ICON = "\U0001F4DD"
 
 STAMP_SHIFTS = {
     STAMP_FULL: ShiftType.FULL,
@@ -101,6 +105,7 @@ class PlanTab(QWidget):
             (STAMP_ONCALL, "Rufbereitschaft"),
             (STAMP_VACATION, "Urlaub"),
             (STAMP_BLOCK, "Block"),
+            (STAMP_NOTE, "Notiz"),
             (STAMP_LOCK, "Fixieren"),
             (STAMP_DELETE, "Loeschen"),
         ]:
@@ -173,9 +178,16 @@ class PlanTab(QWidget):
         self.table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.table.customContextMenuRequested.connect(self.show_context_menu)
         self.table.cellClicked.connect(self.on_cell_clicked)
-        self.delegate = CellDelegate(lambda: self.plan)
+        self.table.itemSelectionChanged.connect(self._update_note_line)
+        self.delegate = CellDelegate(lambda: self.plan, self.settings)
         self.table.setItemDelegate(self.delegate)
         layout.addWidget(self.table)
+
+        # Notizzeile: zeigt die Notiz des zuletzt angeklickten Tages
+        self.note_label = QLabel()
+        self.note_label.setWordWrap(True)
+        self.note_label.setStyleSheet("color: #555555;")
+        layout.addWidget(self.note_label)
 
         # Zusammenfassung + Warnungen
         self.summary_label = QLabel()
@@ -226,8 +238,13 @@ class PlanTab(QWidget):
         if not self.plan or self.active_stamp is None:
             return
         ref = self._cell_ref(row, col)
-        if ref:
-            self.apply_stamp(self.active_stamp, [ref])
+        if not ref:
+            return
+        if self.active_stamp == STAMP_NOTE:
+            # Notiz gilt fuer den Tag, nicht fuer die einzelne Zelle
+            self.edit_note(ref[1])
+            return
+        self.apply_stamp(self.active_stamp, [ref])
 
     def _entry_at(self, assistant_id: str, day: int) -> ShiftEntry | None:
         return next(
@@ -327,9 +344,16 @@ class PlanTab(QWidget):
         self.month_selector.set_month(plan.year, plan.month)
         self.rebuild_grid()
 
+    def _note_text(self, day: int) -> str:
+        if not self.plan:
+            return ""
+        return (self.plan.notes.get(day) or "").strip()
+
     def _day_header(self, day: int) -> str:
         weekday = WEEKDAYS[date(self.plan.year, self.plan.month, day).weekday()]
-        return f"{day}\n{weekday}"
+        # Tage mit Notiz tragen das Notizsymbol im Kopf
+        icon = f" {NOTE_ICON}" if self._note_text(day) else ""
+        return f"{day}{icon}\n{weekday}"
 
     def _make_day_item(self, assistant_id: str, day: int) -> QTableWidgetItem:
         item = QTableWidgetItem()
@@ -401,6 +425,9 @@ class PlanTab(QWidget):
                 item.setText(self._day_header(day).replace("\n", " "))
                 item.setFont(bold)
                 item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                note = self._note_text(day)
+                if note:
+                    item.setToolTip(note)
             self.table.setItem(row, col, item)
 
     def rebuild_grid(self):
@@ -511,7 +538,99 @@ class PlanTab(QWidget):
                 item.setText(f"{full} | {vm} | {nm} | {rb}")
         # Der Delegate zeichnet die Tageszellen direkt aus den Plandaten
         self.table.viewport().update()
+        self._update_day_headers()
+        self._update_note_line()
         self.update_summary()
+
+    # --- Tagesnotizen ---
+
+    def _update_day_headers(self):
+        """Notizsymbol + Tooltip in den Tageskoepfen nachziehen."""
+        if not self.plan:
+            return
+        days_in_month = calendar.monthrange(self.plan.year, self.plan.month)[1]
+        if self.settings.split_view:
+            half = math.ceil(days_in_month / 2)
+            n = len(self.plan.assistants)
+            self._fill_day_header_row(0, first_day=1, days_in_month=days_in_month)
+            self._fill_day_header_row(
+                self._group1_row_offset + n, first_day=half + 1,
+                days_in_month=days_in_month,
+            )
+        else:
+            for col in range(DAY_COL_OFFSET, self.table.columnCount()):
+                day = col - DAY_COL_OFFSET + 1
+                item = self.table.horizontalHeaderItem(col)
+                if item is None or day > days_in_month:
+                    continue
+                item.setText(self._day_header(day))
+                item.setToolTip(self._note_text(day))
+
+    def _current_day(self) -> int | None:
+        """Tag der aktuell gewaehlten Zelle (fuer die Notizzeile)."""
+        item = self.table.currentItem()
+        if item is None:
+            return None
+        ref = item.data(Qt.ItemDataRole.UserRole)
+        return ref[1] if ref else None
+
+    def _update_note_line(self):
+        if not self.plan:
+            self.note_label.setText("")
+            return
+        day = self._current_day()
+        note = self._note_text(day) if day else ""
+        if note:
+            self.note_label.setText(
+                f"{NOTE_ICON} Notiz {day}.{self.plan.month:02d}.: {note}"
+            )
+        else:
+            self.note_label.setText("")
+
+    def edit_note(self, day: int):
+        """Dialog zum Anlegen/Bearbeiten der Tagesnotiz.
+
+        Leerer Text loescht die Notiz (das Symbol im Tageskopf verschwindet).
+        """
+        if not self.plan:
+            return
+        dialog = QDialog(self)
+        dialog.setWindowTitle(
+            f"Notiz fuer {day:02d}.{self.plan.month:02d}.{self.plan.year}"
+        )
+        layout = QVBoxLayout()
+        editor = QPlainTextEdit(self._note_text(day))
+        editor.setPlaceholderText("Notiz zu diesem Tag ...")
+        editor.setMinimumSize(360, 120)
+        layout.addWidget(editor)
+        hint = QLabel("Leer lassen und OK druecken loescht die Notiz.")
+        hint.setStyleSheet("color: #777777;")
+        layout.addWidget(hint)
+
+        buttons = QHBoxLayout()
+        buttons.addStretch()
+        ok_btn = QPushButton("OK")
+        ok_btn.setDefault(True)
+        ok_btn.clicked.connect(dialog.accept)
+        buttons.addWidget(ok_btn)
+        cancel_btn = QPushButton("Abbrechen")
+        cancel_btn.clicked.connect(dialog.reject)
+        buttons.addWidget(cancel_btn)
+        layout.addLayout(buttons)
+        dialog.setLayout(layout)
+        editor.setFocus()
+
+        if not dialog.exec():
+            return
+        text = editor.toPlainText().strip()
+        if text == self._note_text(day):
+            return
+        if text:
+            self.plan.notes[day] = text
+        else:
+            self.plan.notes.pop(day, None)
+        self.refresh_display()
+        self.plan_modified.emit()
 
     def update_summary(self):
         if not self.plan:
@@ -611,6 +730,17 @@ class PlanTab(QWidget):
         menu.addSeparator()
         menu.addAction("Fixieren" + suffix, lambda: self.set_locked(cells, True))
         menu.addAction("Fixierung loesen" + suffix, lambda: self.set_locked(cells, False))
+
+        # Notiz gilt je Tag: Tag der Zelle unter dem Mauszeiger, sonst der
+        # ersten markierten Zelle
+        item = self.table.itemAt(pos)
+        ref = item.data(Qt.ItemDataRole.UserRole) if item else None
+        note_day = ref[1] if ref else cells[0][1]
+        menu.addSeparator()
+        menu.addAction(
+            f"Notiz fuer Tag {note_day} bearbeiten...",
+            lambda: self.edit_note(note_day),
+        )
 
         menu.exec(self.table.mapToGlobal(pos))
 

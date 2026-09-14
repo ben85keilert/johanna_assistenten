@@ -1,9 +1,11 @@
 from __future__ import annotations
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 
 from .json_store import DATA_DIR
 from .atomic_io import DataFileError, read_json, write_json
-from .migrations import migrate_settings, CURRENT_SETTINGS_VERSION
+from .migrations import (
+    migrate_settings, CURRENT_SETTINGS_VERSION, DEFAULT_ENTRY_COLORS,
+)
 
 SETTINGS_FILE = DATA_DIR / "settings.json"
 
@@ -22,6 +24,11 @@ class AppSettings:
     deterministic: bool = True
     # Geteilte Kalenderansicht: zweite Monatshaelfte unter der ersten
     split_view: bool = False
+    # Farbe je Eintragsart (FULL/HALF_MORNING/HALF_AFTERNOON/ON_CALL/
+    # VACATION/BLOCK) als Hex-String; einstellbar unter Einstellungen > Farben
+    entry_colors: dict[str, str] = field(
+        default_factory=lambda: dict(DEFAULT_ENTRY_COLORS)
+    )
 
 
 def load_settings() -> AppSettings:
@@ -43,6 +50,14 @@ def load_settings() -> AppSettings:
         seed=data.get("seed", 42),
         deterministic=data.get("deterministic", True),
         split_view=data.get("split_view", False),
+        # Fehlende Arten (z. B. nach Updates) mit Standardfarben auffuellen
+        entry_colors={
+            **DEFAULT_ENTRY_COLORS,
+            **{
+                k: v for k, v in data.get("entry_colors", {}).items()
+                if isinstance(v, str)
+            },
+        },
     )
 
 
