@@ -1,4 +1,4 @@
-from .shift import ShiftType, ShiftEntry, DUTY_TYPES, is_duty
+from .shift import ShiftType, ShiftEntry, DUTY_TYPES, is_duty, is_effective
 from .assistant import (
     Assistant, AssistantConstraints,
     absence_days, set_absence_days, blocked_days, set_blocked_days,
@@ -13,6 +13,7 @@ __all__ = [
     "ShiftEntry",
     "DUTY_TYPES",
     "is_duty",
+    "is_effective",
     "Assistant",
     "AssistantConstraints",
     "absence_days",

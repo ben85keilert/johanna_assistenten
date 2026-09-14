@@ -69,11 +69,20 @@ Jeder Helfer hat eigene Vorgaben:
   Tage hintereinander (z. B. 2er- oder 3er-Blöcke). Der Generator plant sie nur in
   zusammenhängenden Blöcken ein — auch bei der Rufbereitschaft. Muss ≤ „Max. Tage
   am Stück" sein.
-- **Urlaub** (nicht verfügbare Einzeltage und Urlaubszeiträume) und **Block**
-  (reguläre Sperrzeiten, z. B. andere Verpflichtungen): an diesen Tagen wird die
-  Person nie eingeplant — weder für Dienst noch für Rufbereitschaft. Beide Arten
-  wirken gleich; der Unterschied ist rein die Kategorie (echter Urlaub bleibt von
-  sonstigen geblockten Zeiten unterscheidbar).
+- **Urlaub** (nicht verfügbare Einzeltage und Urlaubszeiträume): an diesen Tagen
+  wird die Person **nie** eingeplant — weder für Dienst noch für Rufbereitschaft.
+  Urlaub ist **zwingend** und wird unter keinen Umständen überplant.
+- **Block (Freiwünsche)** (Sperrzeiten, z. B. andere Verpflichtungen oder
+  Wunsch-frei-Tage): wirken grundsätzlich wie Urlaub, sind aber **Wünsche, keine
+  Pflicht**. Je Helfer gibt es ein **Freiwunsch-Kontingent** („Freiwünsche",
+  einstellbar in den Team-Vorlagen; **„Alle"** = kein Kontingent, alle Blocks
+  sind hart wie Urlaub — das ist der Standard und das bisherige Verhalten).
+  Ist ein Kontingent gesetzt, gilt: Die **chronologisch ersten N Block-Tage
+  des Monats haben Vorrang** und werden nie überplant; alle **weiteren
+  Block-Tage haben Nachrang** — sie werden normalerweise ebenfalls respektiert,
+  dürfen aber überplant werden, wenn ein Tag sonst unbesetzt bliebe (siehe
+  Konflikt-Dialog unten). Helfer, die ihr Kontingent noch nicht ausgeschöpft
+  haben, haben mit ihren Wünschen also Vorrang vor den Zusatz-Wünschen anderer.
 
 Weitere Bedingungen (z. B. Wochenend-Fairness) folgen später und werden hier ergänzt.
 
@@ -118,14 +127,36 @@ Drei Tabs:
      Typs bleiben unangetastet — außer die Checkbox **„Überschreiben"** ist
      bewusst eingeschaltet (Standard: aus), dann ersetzt der Stempel sie.
      **Löschen** entfernt Stempel und Zufalls-Vorschläge per Klick.
+   - **Kandidaten (mehrere Personen je Tag)**: Für **Tagesdienst (VOLL)** und
+     **Rufbereitschaft** dürfen an einem Tag mehrere Personen eingetragen
+     werden. Hat ein Tag **genau einen** manuell erstellten Volleintrag, ist
+     dieser **fix** (wie bisher, mit Schloss). Stempelt man denselben Typ für
+     eine **zweite** Person auf den Tag, werden beide Einträge zu
+     **Kandidaten**: blass dargestellt mit **„?"** und gestricheltem Rahmen —
+     der Tag ist damit wieder „zu wählen". Weitere Stempel fügen weitere
+     Kandidaten hinzu; ein Klick mit demselben Stempel entfernt den eigenen
+     Kandidaten wieder (bleibt nur einer übrig, wird er wieder ein normaler
+     fixer Eintrag). **Neu würfeln wählt automatisch** einen der Kandidaten
+     nach den Fairness-Regeln (die Wahl ist wie jeder Zufallseintrag
+     transparent dargestellt und wird beim nächsten Würfeln neu getroffen);
+     per Rechtsklick → **„Kandidat fest wählen"** entscheidet man selbst —
+     die Wahl ist dann fixiert. Nicht gewählte Kandidaten bleiben sichtbar
+     und zählen nicht als Abdeckung oder für die Soll-Dienste.
    - **Mehrfachauswahl**: mit Strg/Shift lassen sich mehrere Zellen (auch verstreut)
      markieren; das Rechtsklick-Menü wirkt dann auf alle markierten Zellen.
    - **Urlaub und Block** im Raster: zusammenhängend gestempelte Tage werden
      automatisch zu Zeiträumen zusammengefasst und erscheinen im Urlaub-Tab;
      Einzeltage bleiben Einzeltage. Wird ein
      Tag mitten aus einem Zeitraum wieder entfernt, teilt sich der Zeitraum
-     entsprechend. Im Raster erscheint Urlaub als graues **„U"**, Block als
-     graues **„X"**.
+     entsprechend. Im Raster erscheint Urlaub als **„U"**, Block als **„X"**,
+     jeweils in der Farbe der Eintragsart (siehe Farbmanagement unten).
+   - **Tagesnotizen**: Zu jedem Tag lässt sich eine Freitext-Notiz hinterlegen
+     (Stempel **„Notiz"** + Klick auf eine Zelle des Tages, oder Rechtsklick →
+     „Notiz für Tag … bearbeiten…"). Tage mit Notiz tragen im Tageskopf ein
+     **Notizsymbol (📝)**; der Text erscheint als Tooltip auf dem Tageskopf
+     und in einer **Notizzeile unter dem Raster**, sobald eine Zelle des Tages
+     angeklickt ist. Der Dialog bearbeitet die Notiz mehrzeilig; leerer Text
+     löscht sie.
    - Unter dem Raster: Zusammenfassung pro Helfer als Tupel `Name (VOLL|VM|NM|RB)`
      mit Legende sowie Warnhinweise (unbesetzte/halbe Tage, Tage ohne
      Rufbereitschaft, Zielabweichungen, Abweichungen Rufbereitschaft/Dienste).
@@ -134,8 +165,10 @@ Drei Tabs:
    In der Tab-Zeile: **Monat**, **Person** sowie die Listenfilter „Nur dieser
    Monat" und „Vergangene anzeigen".
    - **Links ein Monatskalender** in Wochenform (Spalten Mo–So, Zeilen =
-     Kalenderwochen). Ist oben eine Person gewählt, zeigt er deren Abwesenheiten:
-     **grün = Urlaub, rot = Block**, der heutige Tag ist fett. Bei „Alle Helfer"
+     Kalenderwochen). Ist oben eine Person gewählt, zeigt er deren Abwesenheiten
+     in den unter **Einstellungen → Farben…** gewählten Urlaub-/Block-Farben
+     (Standard: grün = Urlaub, rot = Block; die Legende unter dem Kalender
+     zeigt die aktuellen Farben), der heutige Tag ist fett. Bei „Alle Helfer"
      stehen in jedem Tag die betroffenen Namen (`U`/`B` davor) — zum Einsehen,
      wer wann weg ist.
    - **Eintragen** wie im Dienstplan über Stempel: **Urlaub | Block | Löschen**.
@@ -154,7 +187,8 @@ Drei Tabs:
 3. **Team-Tab**: die Helferliste (anlegen/entfernen, Name und Farbe) in
    **zwei Vorlagen-Tabs** („Vorlage 1"/„Vorlage 2"): jede Vorlage hält einen
    kompletten Satz Einstellungen je Helfer — **Min./Max. Dienste, Max. Folge,
-   Min. Block, Abstand (Mindestabstand) und RB anhängen** — direkt in der
+   Min. Block, Abstand (Mindestabstand), Freiwünsche (Freiwunsch-Kontingent,
+   „Alle" = kein Kontingent) und RB anhängen** — direkt in der
    Tabelle mit Minus/Plus-Buttons (Min./Max.-Paare halten sich automatisch
    konsistent). Änderungen an einer Vorlage wirken **nicht sofort** auf den
    Plan: erst der Button **„In Dienstplan … übernehmen"** überträgt die
@@ -173,8 +207,15 @@ Drei Tabs:
 2. **Neu würfeln** füllt die restlichen Tage zufällig, unter Beachtung aller
    Regeln. Zufällig vergebene Dienste tragen einen **Punkt**.
 3. Was gefällt, **fixiert** man per Klick (Fixieren-Stempel oder Rechtsklick).
-   **Farblogik: fixierte Einträge sind kräftig gefärbt und tragen ein Schloss,
-   nicht fixierte sind blasser.**
+   **Farblogik (Farbmanagement): nicht die Helfer, sondern die Eintragsarten
+   tragen die Farbe** — VOLL, VM, NM, RB, Urlaub und Block haben je eine
+   einheitliche, unter **Einstellungen → Farben…** einstellbare Farbe (mit
+   Vorschau und „Standardfarben"-Reset). **Feste Einträge (von Hand gesetzt
+   oder fixiert) sind kräftig/voll gefärbt; noch in Planung befindliche
+   (gewürfelt, nicht fixiert) erscheinen transparenter** und tragen
+   zusätzlich einen Punkt, fixierte ein Schloss. Die Helferfarbe aus dem
+   Team-Tab dient weiter der Wiedererkennung in Listen, Auswahlfeldern und
+   Exporten.
    „Deterministisch" bedeutet: Mit gleichem Seed und gleichen Fixpunkten liefert
    „Generieren" immer denselben Plan (reproduzierbar); ohne Häkchen würfelt jeder
    Klick anders.
@@ -194,6 +235,23 @@ Mindestabstand werden nie verletzt; wenn dadurch (oder in kleinen Teams durch
 die Folgen-Grenzen) Tage nicht besetzbar sind, bleiben sie offen und erscheinen
 als Warnung unter dem Raster — das ist gewollt, nicht kaputt.
 
+### Konflikt-Dialog: wenn Wünsche nicht erfüllbar sind
+
+Bleibt ein Tag nach allen Regeln unbesetzt, versucht der Generator als letzte
+Stufe, einen **Nachrang-Freiwunsch zu überplanen** (nie einen Urlaub, nie einen
+Vorrang-Wunsch, nie eine harte Grenze wie Max. Dienste oder Mindestabstand):
+Der Tag wird **trotzdem belegt**, bevorzugt bei der Person mit dem größten
+Wunsch-Überhang über ihrem Kontingent und den wenigsten Diensten — das ist der
+**vernünftige Vorschlag**, der am Ende immer steht. Nach dem Würfeln zeigt ein
+**Konflikt-Dialog** alle solchen Entscheidungen: je Konflikt der Tag, die Art
+(Dienst/Rufbereitschaft) und eine Auswahl mit dem Vorschlag vorausgewählt,
+anderen überplanbaren Personen und **„Tag offen lassen"**. Bestätigen übernimmt
+die Auswahl; Abbrechen behält die Vorschläge (sie sind bereits ein gültiger
+Plan). **Urlaube sind zwingend, Wünsche nicht.** Ein überplanter Wunsch wird
+**nicht gelöscht**: der Block-Tag bleibt eingetragen und sichtbar, die Zelle
+trägt eine Warnmarkierung und unter dem Raster erscheint eine Warnung
+(„Freiwunsch überplant").
+
 ## Datenhaltung
 
 Alle Daten liegen als **JSON** im Ordner `data/` neben dem Programm. Beim Start wird
@@ -208,6 +266,11 @@ Dafür sorgen vier Dinge:
   das Programm sie automatisch weg (Statuszeile: „Automatisch gespeichert (hh:mm:ss)").
   Ein Absturz kostet damit höchstens die letzten Sekunden. Zusätzlich wird beim
   Monatswechsel und beim Beenden gespeichert, `Strg+S` speichert jederzeit von Hand.
+  **Datei → Speichern unter… (`Strg+Umschalt+S`)** legt darüber hinaus eine frei
+  benannte **Kopie** des aktuellen Plans (samt Team) an beliebiger Stelle ab —
+  z. B. als Planvariante oder zur Weitergabe; sie lässt sich über
+  „Plan-Datei öffnen…" wieder laden. Die automatische Ablage unter
+  `data/plans/` läuft davon unabhängig weiter.
 - **Nachfrage beim Beenden**: Wird das Fenster geschlossen, während noch Änderungen
   offen sind (also innerhalb der 15 Sekunden bis zum nächsten Autosave), fragt das
   Programm: *Speichern und beenden* / *Ohne Speichern beenden* / *Abbrechen*. Ohne
@@ -236,7 +299,7 @@ Stefan H., Irisz, Geli, Max, Paula, Laura):
 
 ```json
 {
-  "version": 5,
+  "version": 6,
   "assistants": [
     { "id": "8cdf0de4", "name": "Tobias", "color": "#00aa00", "active": true,
       "constraints": {
@@ -248,14 +311,16 @@ Stefan H., Irisz, Geli, Max, Paula, Laura):
         "max_consecutive_days": 4,
         "min_block_days": 3,
         "min_gap_days": 0,
-        "oncall_attach": "none" } }
+        "oncall_attach": "none",
+        "free_wish_quota": null } }
   ],
   "profiles": [
     { "name": "Vorlage 1",
       "settings": {
         "8cdf0de4": { "min_shifts": null, "max_shifts": null,
                       "max_consecutive_days": 4, "min_block_days": 3,
-                      "min_gap_days": 0, "oncall_attach": "none" } } },
+                      "min_gap_days": 0, "oncall_attach": "none",
+                      "free_wish_quota": null } } },
     { "name": "Vorlage 2", "settings": { "…": {} } }
   ]
 }
@@ -265,6 +330,9 @@ Stefan H., Irisz, Geli, Max, Paula, Laura):
   (0 = aus).
 - `oncall_attach`: `"none"`, `"before"` oder `"after"` — Rufbereitschaft als
   Block direkt vor/nach dem Dienstblock.
+- `free_wish_quota`: Freiwunsch-Kontingent (`null` = „Alle": alle Blocks hart
+  wie bisher; Zahl = so viele Block-Tage je Monat haben Vorrang, weitere
+  Nachrang).
 
 ### `data/plans/plan_JJJJ_MM.json` — ein Plan pro Monat
 
@@ -274,19 +342,22 @@ Vorlage) für diesen Monat übernommen wurde:
 
 ```json
 {
-  "version": 5,
+  "version": 7,
   "year": 2026,
   "month": 9,
   "schedule": {
     "1": [ { "assistant_id": "f6164e36", "shift_type": "FULL",
-             "locked": true, "generated": false },
+             "locked": true, "generated": false,
+             "candidate": false, "chosen": false },
            { "assistant_id": "8cdf0de4", "shift_type": "ON_CALL",
-             "locked": false, "generated": true } ]
+             "locked": false, "generated": true,
+             "candidate": false, "chosen": false } ]
   },
+  "notes": { "3": "Arzttermin 10 Uhr" },
   "settings": {
     "f6164e36": { "min": 3, "max": 6, "max_consecutive_days": 1,
                   "min_block_days": 1, "min_gap_days": 0,
-                  "oncall_attach": "none" }
+                  "oncall_attach": "none", "free_wish_quota": null }
   },
   "seed": 42,
   "created_at": "…", "modified_at": "…"
@@ -297,8 +368,12 @@ Aus Version 4 migrierte Monatsdateien kennen nur die Soll-Spanne (`min`/`max`);
 die übrigen Felder kommen dann weiterhin aus `team.json`.
 
 - `locked`: fixiert — übersteht das Neuwürfeln.
-- `generated`: wurde vom Zufallsgenerator vergeben (farblich markiert), nicht von Hand.
+- `generated`: wurde vom Zufallsgenerator vergeben (transparenter dargestellt), nicht von Hand.
 - `shift_type: "ON_CALL"`: Rufbereitschaft (im Raster als „RB").
+- `candidate`/`chosen`: Kandidaten-Mechanik — `candidate` markiert einen von
+  mehreren Vorschlägen für den Tag (zählt nicht als Abdeckung/Soll, solange
+  nicht gewählt), `chosen` die getroffene Wahl (vom Würfeln oder von Hand).
+- `notes`: Freitext-Notiz je Tag (Tag → Text); leere Notizen werden nicht gespeichert.
 
 In den CSV-/Excel-/PDF-Exporten hat die Zusammenfassung eine eigene **RB**-Spalte;
 „Dienste gesamt" ist die gewichtete Dienstzahl (VOLL = 1, VM/NM = 0,5, ohne RB).
@@ -307,14 +382,22 @@ In den CSV-/Excel-/PDF-Exporten hat die Zusammenfassung eine eigene **RB**-Spalt
 
 ```json
 {
-  "version": 3,
+  "version": 4,
   "last_year": 2026, "last_month": 8,
   "window_geometry": "…",
   "allow_overwrite": false,
   "seed": 42, "deterministic": true,
-  "split_view": false
+  "split_view": false,
+  "entry_colors": {
+    "FULL": "#5B9BD5", "HALF_MORNING": "#4DB6AC",
+    "HALF_AFTERNOON": "#F2A54A", "ON_CALL": "#9575CD",
+    "VACATION": "#81C784", "BLOCK": "#E57373"
+  }
 }
 ```
+
+- `entry_colors`: die unter **Einstellungen → Farben…** gewählte Farbe je
+  Eintragsart (fehlende Arten erhalten beim Laden die Standardfarbe).
 
 ## Updatefähigkeit & Migration
 

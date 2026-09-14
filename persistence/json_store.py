@@ -46,6 +46,7 @@ def _constraints_to_dict(c: AssistantConstraints, include_target: bool = True) -
         "min_block_days": c.min_block_days,
         "min_gap_days": c.min_gap_days,
         "oncall_attach": c.oncall_attach,
+        "free_wish_quota": c.free_wish_quota,
     }
     if include_target:
         result["min_shifts"] = c.min_shifts
@@ -85,6 +86,7 @@ def _constraints_from_dict(c_data: dict, assistant_id: str = "") -> AssistantCon
         min_block_days=c_data.get("min_block_days", 1),
         min_gap_days=c_data.get("min_gap_days", 0),
         oncall_attach=c_data.get("oncall_attach", "none"),
+        free_wish_quota=c_data.get("free_wish_quota"),
         min_shifts=c_data.get("min_shifts"),
         max_shifts=c_data.get("max_shifts"),
     )
@@ -98,6 +100,7 @@ def _profile_settings_to_dict(s: AssistantSettings) -> dict:
         "min_block_days": s.min_block_days,
         "min_gap_days": s.min_gap_days,
         "oncall_attach": s.oncall_attach,
+        "free_wish_quota": s.free_wish_quota,
     }
 
 
@@ -109,6 +112,7 @@ def _profile_settings_from_dict(d: dict) -> AssistantSettings:
         min_block_days=d.get("min_block_days", 1),
         min_gap_days=d.get("min_gap_days", 0),
         oncall_attach=d.get("oncall_attach", "none"),
+        free_wish_quota=d.get("free_wish_quota"),
     )
 
 
@@ -141,6 +145,8 @@ def _entry_to_dict(e: ShiftEntry) -> dict:
         "shift_type": e.shift_type.value,
         "locked": e.locked,
         "generated": e.generated,
+        "candidate": e.candidate,
+        "chosen": e.chosen,
     }
 
 
@@ -150,6 +156,8 @@ def _entry_from_dict(e_data: dict) -> ShiftEntry:
         shift_type=ShiftType(e_data.get("shift_type", "FULL")),
         locked=e_data.get("locked", False),
         generated=e_data.get("generated", False),
+        candidate=e_data.get("candidate", False),
+        chosen=e_data.get("chosen", False),
     )
 
 
@@ -164,6 +172,19 @@ def _schedule_from_dict(data: dict) -> dict[int, list[ShiftEntry]]:
     return {
         int(day_str): [_entry_from_dict(e) for e in entries]
         for day_str, entries in data.items()
+    }
+
+
+def _notes_to_dict(notes: dict[int, str]) -> dict:
+    # Leere Notizen fallen beim Speichern weg
+    return {str(day): text for day, text in notes.items() if text.strip()}
+
+
+def _notes_from_dict(data: dict) -> dict[int, str]:
+    return {
+        int(day_str): text
+        for day_str, text in data.items()
+        if isinstance(text, str) and text.strip()
     }
 
 
@@ -189,6 +210,7 @@ def save(plan: MonthPlan, path: str | Path) -> None:
         "year": plan.year,
         "month": plan.month,
         "schedule": _schedule_to_dict(plan.schedule),
+        "notes": _notes_to_dict(plan.notes),
         "assistants": [_assistant_to_dict(a, with_constraints=True) for a in plan.assistants],
         "seed": plan.seed,
         "created_at": plan.created_at,
@@ -223,6 +245,7 @@ def load(path: str | Path) -> MonthPlan:
         year=data.get("year", 2026),
         month=data.get("month", 1),
         schedule=_schedule_from_dict(data.get("schedule", {})),
+        notes=_notes_from_dict(data.get("notes", {})),
         assistants=assistants,
         seed=data.get("seed"),
         created_at=data.get("created_at", ""),
@@ -310,6 +333,7 @@ def save_plan(plan: MonthPlan) -> None:
         "year": plan.year,
         "month": plan.month,
         "schedule": _schedule_to_dict(plan.schedule),
+        "notes": _notes_to_dict(plan.notes),
         # Schnappschuss der Planungs-Einstellungen dieses Monats (z. B. aus
         # einer Vorlage uebernommen); Abwesenheiten liegen weiter in team.json
         "settings": {
@@ -320,6 +344,7 @@ def save_plan(plan: MonthPlan) -> None:
                 "min_block_days": a.constraints.min_block_days,
                 "min_gap_days": a.constraints.min_gap_days,
                 "oncall_attach": a.constraints.oncall_attach,
+                "free_wish_quota": a.constraints.free_wish_quota,
             }
             for a in plan.assistants
         },
@@ -377,6 +402,8 @@ def load_plan(year: int, month: int, assistants: list[Assistant]) -> MonthPlan |
                 c.min_gap_days = s["min_gap_days"]
             if "oncall_attach" in s:
                 c.oncall_attach = s["oncall_attach"]
+            if "free_wish_quota" in s:
+                c.free_wish_quota = s["free_wish_quota"]
         else:
             # Helfer ohne Eintrag (z. B. spaeter angelegt): Soll auf Auto
             c.min_shifts = None
@@ -386,6 +413,7 @@ def load_plan(year: int, month: int, assistants: list[Assistant]) -> MonthPlan |
         year=year,
         month=month,
         schedule=_schedule_from_dict(data.get("schedule", {})),
+        notes=_notes_from_dict(data.get("notes", {})),
         assistants=assistants,
         seed=data.get("seed"),
         created_at=data.get("created_at", ""),

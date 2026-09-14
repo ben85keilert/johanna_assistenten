@@ -8,9 +8,20 @@ Dateien nach einem Programm-Update weiter funktionieren.
 from __future__ import annotations
 import copy
 
-CURRENT_TEAM_VERSION = 5
-CURRENT_PLAN_VERSION = 5
-CURRENT_SETTINGS_VERSION = 3
+CURRENT_TEAM_VERSION = 6
+CURRENT_PLAN_VERSION = 7
+CURRENT_SETTINGS_VERSION = 4
+
+# Einheitliche Farben je Eintragsart (statt einer Farbe je Helfer).
+# Aenderbar unter Einstellungen > Farben; hier die Standardwerte.
+DEFAULT_ENTRY_COLORS = {
+    "FULL": "#5B9BD5",            # Tagesdienst: Blau
+    "HALF_MORNING": "#4DB6AC",    # VM: Tuerkis
+    "HALF_AFTERNOON": "#F2A54A",  # NM: Orange
+    "ON_CALL": "#9575CD",         # Rufbereitschaft: Violett
+    "VACATION": "#81C784",        # Urlaub: Gruen
+    "BLOCK": "#E57373",           # Block: Rot
+}
 
 
 def migrate_team(data) -> dict:
@@ -69,6 +80,17 @@ def migrate_team(data) -> dict:
                 {"name": "Vorlage 2", "settings": copy.deepcopy(settings)},
             ]
         version = 5
+
+    if version < 6:
+        # v5 -> v6: Freiwunsch-Kontingent je Helfer (None = "Alle": alle
+        # Block-Tage bleiben hart wie bisher) - auch in beiden Vorlagen
+        for assistant in data.get("assistants", []):
+            assistant.get("constraints", {}).setdefault("free_wish_quota", None)
+        for profile in data.get("profiles", []):
+            for settings in profile.get("settings", {}).values():
+                if isinstance(settings, dict):
+                    settings.setdefault("free_wish_quota", None)
+        version = 6
 
     data["version"] = CURRENT_TEAM_VERSION
     return data
@@ -143,6 +165,22 @@ def migrate_plan(data: dict) -> dict:
             constraints.setdefault("oncall_attach", "none")
         version = 5
 
+    if version < 6:
+        # v5 -> v6: Freitext-Notizen je Tag ("notes": Tag -> Text)
+        data.setdefault("notes", {})
+        version = 6
+
+    if version < 7:
+        # v6 -> v7: Kandidaten-Mechanik (candidate/chosen je Eintrag) und
+        # Freiwunsch-Kontingent; Vollplan-Dateien tragen Constraints direkt
+        for entries in data.get("schedule", {}).values():
+            for entry in entries:
+                entry.setdefault("candidate", False)
+                entry.setdefault("chosen", False)
+        for assistant in data.get("assistants", []):
+            assistant.get("constraints", {}).setdefault("free_wish_quota", None)
+        version = 7
+
     data["version"] = CURRENT_PLAN_VERSION
     return data
 
@@ -161,6 +199,11 @@ def migrate_settings(data: dict) -> dict:
         data.pop("confirm_overwrite", None)
         data.setdefault("allow_overwrite", False)
         version = 3
+
+    if version < 4:
+        # v3 -> v4: einstellbare Farben je Eintragsart (Farbmanagement)
+        data.setdefault("entry_colors", dict(DEFAULT_ENTRY_COLORS))
+        version = 4
 
     data["version"] = CURRENT_SETTINGS_VERSION
     return data

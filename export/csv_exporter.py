@@ -1,6 +1,6 @@
 import csv
 from pathlib import Path
-from models import MonthPlan, ShiftType
+from models import MonthPlan, ShiftType, is_effective
 import calendar
 
 
@@ -27,7 +27,8 @@ def export_csv(plan: MonthPlan, folder: str | Path) -> tuple[str, str]:
             row = [assistant.name]
             for day in range(1, days_in_month + 1):
                 entries = plan.schedule.get(day, [])
-                matching = [e for e in entries if e.assistant_id == assistant.id]
+                matching = [e for e in entries
+                            if e.assistant_id == assistant.id and is_effective(e)]
                 if matching:
                     entry = matching[0]
                     if entry.shift_type == ShiftType.FULL:
@@ -57,7 +58,7 @@ def export_csv(plan: MonthPlan, folder: str | Path) -> tuple[str, str]:
 
             for entries in plan.schedule.values():
                 for e in entries:
-                    if e.assistant_id == assistant.id:
+                    if e.assistant_id == assistant.id and is_effective(e):
                         if e.shift_type == ShiftType.FULL:
                             full_count += 1
                         elif e.shift_type == ShiftType.HALF_MORNING:
