@@ -8,17 +8,19 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QFont
 
 from models import (
-    MonthPlan, ShiftEntry, ShiftType,
+    MonthPlan, ShiftEntry, ShiftType, is_effective,
     absence_days, set_absence_days, blocked_days, set_blocked_days,
 )
 from persistence import AppSettings
 from datetime import date
 import calendar
 import math
+import random
 from . import theme
 from .widgets.month_selector import MonthSelector
 from .widgets.big_stepper import BigStepper
 from .cell_delegate import CellDelegate
+from .conflict_dialog import ConflictDialog
 from scheduling.engine import generate
 from scheduling.validator import validate
 
@@ -42,6 +44,10 @@ STAMP_SHIFTS = {
     STAMP_NM: ShiftType.HALF_AFTERNOON,
     STAMP_ONCALL: ShiftType.ON_CALL,
 }
+
+# Dienstarten mit Kandidaten-Mechanik: mehrere manuelle Vorschlaege je Tag,
+# aus denen gewaehlt wird (VM/NM bleiben Ausnahme-Dienste ohne Kandidaten)
+CANDIDATE_TYPES = (ShiftType.FULL, ShiftType.ON_CALL)
 
 WEEKDAYS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
 
@@ -265,6 +271,48 @@ class PlanTab(QWidget):
             ShiftEntry(assistant_id=assistant_id, shift_type=shift_type, locked=True)
         )
 
+    # --- Kandidaten (mehrere Personen fuer denselben Dienst/RB am Tag) ---
+
+    def _same_type_manual_entries(self, day: int, shift_type: ShiftType,
+                                  exclude_id: str | None = None) -> list[ShiftEntry]:
+        """Manuelle Eintraege (inkl. Kandidaten) dieses Typs anderer Personen."""
+        return [
+            e for e in self.plan.schedule.get(day, [])
+            if e.shift_type == shift_type and not e.generated
+            and e.assistant_id != exclude_id
+        ]
+
+    def _normalize_candidates(self, day: int, shift_type: ShiftType):
+        """Bleibt nur ein Kandidat uebrig, wird er wieder ein normaler
+        fixer Einzeleintrag (ein manueller Volleintrag = fix)."""
+        candidates = [
+            e for e in self.plan.schedule.get(day, [])
+            if e.candidate and e.shift_type == shift_type
+        ]
+        if len(candidates) == 1:
+            e = candidates[0]
+            e.candidate = False
+            e.chosen = False
+            e.locked = True
+
+    def _choose_candidate_entry(self, entry: ShiftEntry, day: int):
+        """Feste Wahl eines Kandidaten: uebrige Kandidaten desselben
+        Tags/Typs verlieren ihre Wahl."""
+        for e in self.plan.schedule.get(day, []):
+            if e.candidate and e.shift_type == entry.shift_type and e is not entry:
+                e.chosen = False
+                e.locked = False
+        entry.chosen = True
+        entry.locked = True
+
+    def choose_candidate(self, assistant_id: str, day: int):
+        entry = self._entry_at(assistant_id, day)
+        if not self.plan or entry is None or not entry.candidate:
+            return
+        self._choose_candidate_entry(entry, day)
+        self.refresh_display()
+        self.plan_modified.emit()
+
     def apply_stamp(self, stamp: str, cells: list[tuple[str, int]]):
         """Wendet einen Stempel auf Zellen (assistant_id, day) an.
 
@@ -287,14 +335,40 @@ class PlanTab(QWidget):
                 # Entfernt Stempel und Zufalls-Vorschlaege
                 if entry:
                     self._remove_entry(assistant_id, day)
+                    if entry.candidate:
+                        self._normalize_candidates(day, entry.shift_type)
                     changed = True
 
             elif stamp in STAMP_SHIFTS:
                 shift_type = STAMP_SHIFTS[stamp]
                 if entry and entry.shift_type == shift_type:
                     self._remove_entry(assistant_id, day)
+                    # Verbleibt genau ein Kandidat, wird er wieder fix
+                    self._normalize_candidates(day, shift_type)
                 elif entry is None or allow_overwrite:
-                    self._set_entry(assistant_id, day, shift_type)
+                    if entry is not None:
+                        self._remove_entry(assistant_id, day)
+                    others = (
+                        self._same_type_manual_entries(day, shift_type, assistant_id)
+                        if shift_type in CANDIDATE_TYPES else []
+                    )
+                    if others:
+                        # Zweite/weitere Person fuer denselben Dienst/RB:
+                        # alle manuellen Eintraege des Typs werden Kandidaten
+                        # - der Tag ist damit wieder "zu waehlen"
+                        for e in others:
+                            e.candidate = True
+                            e.chosen = False
+                            e.locked = False
+                        self.plan.schedule.setdefault(day, []).append(
+                            ShiftEntry(
+                                assistant_id=assistant_id,
+                                shift_type=shift_type,
+                                candidate=True,
+                            )
+                        )
+                    else:
+                        self._set_entry(assistant_id, day, shift_type)
                 else:
                     continue
                 changed = True
@@ -328,7 +402,11 @@ class PlanTab(QWidget):
 
             elif stamp == STAMP_LOCK:
                 if entry:
-                    entry.locked = not entry.locked
+                    if entry.candidate and not entry.locked:
+                        # Fixieren eines Kandidaten = feste Wahl
+                        self._choose_candidate_entry(entry, day)
+                    else:
+                        entry.locked = not entry.locked
                     changed = True
 
         if changed:
@@ -514,7 +592,8 @@ class PlanTab(QWidget):
         full = vm = nm = rb = 0
         for entries in self.plan.schedule.values():
             for e in entries:
-                if e.assistant_id != assistant_id:
+                # Nicht gewaehlte Kandidaten sind nur Vorschlaege
+                if e.assistant_id != assistant_id or not is_effective(e):
                     continue
                 if e.shift_type == ShiftType.FULL:
                     full += 1
@@ -662,14 +741,50 @@ class PlanTab(QWidget):
         if not self.plan:
             return
 
-        seed = self.settings.seed if self.settings.deterministic else None
+        # Auch ohne "Deterministisch" einen konkreten Seed ziehen: der
+        # Konflikt-Dialog wiederholt den Lauf ggf. mit denselben Wuerfeln
+        if self.settings.deterministic:
+            seed = self.settings.seed
+        else:
+            seed = random.randrange(0, 1_000_000)
         try:
-            self.plan = generate(self.plan, seed)
+            result = generate(self.plan, seed)
+            self.plan = result.plan
             self.plan.seed = seed
             self.refresh_display()
             self.plan_modified.emit()
+            if result.conflicts:
+                self._handle_conflicts(result, seed)
         except Exception as e:
             QMessageBox.critical(self, "Fehler", f"Generierung fehlgeschlagen:\n{e}")
+
+    def _handle_conflicts(self, result, seed: int):
+        """Zeigt die Konflikte des Laufs; weicht die Nutzerwahl von den
+        angewendeten Vorschlaegen ab, wiederholt sich der Lauf mit einem
+        Resolver, der diese Entscheidungen beantwortet."""
+        dialog = ConflictDialog(result.conflicts, self)
+        if not dialog.exec():
+            return  # Vorschlaege behalten
+        decisions = dialog.decisions()
+        applied = {
+            (c.day, c.kind): c.options[c.applied].assistant_id
+            for c in result.conflicts
+        }
+        if decisions == applied:
+            return
+
+        def resolver(conflict):
+            key = (conflict.day, conflict.kind)
+            if key in decisions:
+                for option in conflict.options:
+                    if option.assistant_id == decisions[key]:
+                        return option
+            return conflict.options[conflict.proposal]
+
+        rerun = generate(self.plan, seed, resolver=resolver)
+        self.plan = rerun.plan
+        self.refresh_display()
+        self.plan_modified.emit()
 
     def reset_schedule(self):
         if not self.plan:
@@ -736,6 +851,16 @@ class PlanTab(QWidget):
         item = self.table.itemAt(pos)
         ref = item.data(Qt.ItemDataRole.UserRole) if item else None
         note_day = ref[1] if ref else cells[0][1]
+
+        # Feste Wahl eines Kandidaten (Zelle unter dem Mauszeiger)
+        if ref:
+            entry = self._entry_at(ref[0], ref[1])
+            if entry is not None and entry.candidate:
+                menu.addSeparator()
+                menu.addAction(
+                    "Kandidat fest waehlen",
+                    lambda: self.choose_candidate(ref[0], ref[1]),
+                )
         menu.addSeparator()
         menu.addAction(
             f"Notiz fuer Tag {note_day} bearbeiten...",
@@ -750,7 +875,13 @@ class PlanTab(QWidget):
         changed = False
         for assistant_id, day in cells:
             entry = self._entry_at(assistant_id, day)
-            if entry and entry.locked != locked:
+            if entry is None:
+                continue
+            if locked and entry.candidate and not entry.locked:
+                # Fixieren eines Kandidaten = feste Wahl
+                self._choose_candidate_entry(entry, day)
+                changed = True
+            elif entry.locked != locked:
                 entry.locked = locked
                 changed = True
         if changed:

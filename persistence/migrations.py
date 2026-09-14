@@ -8,8 +8,8 @@ Dateien nach einem Programm-Update weiter funktionieren.
 from __future__ import annotations
 import copy
 
-CURRENT_TEAM_VERSION = 5
-CURRENT_PLAN_VERSION = 6
+CURRENT_TEAM_VERSION = 6
+CURRENT_PLAN_VERSION = 7
 CURRENT_SETTINGS_VERSION = 4
 
 # Einheitliche Farben je Eintragsart (statt einer Farbe je Helfer).
@@ -80,6 +80,17 @@ def migrate_team(data) -> dict:
                 {"name": "Vorlage 2", "settings": copy.deepcopy(settings)},
             ]
         version = 5
+
+    if version < 6:
+        # v5 -> v6: Freiwunsch-Kontingent je Helfer (None = "Alle": alle
+        # Block-Tage bleiben hart wie bisher) - auch in beiden Vorlagen
+        for assistant in data.get("assistants", []):
+            assistant.get("constraints", {}).setdefault("free_wish_quota", None)
+        for profile in data.get("profiles", []):
+            for settings in profile.get("settings", {}).values():
+                if isinstance(settings, dict):
+                    settings.setdefault("free_wish_quota", None)
+        version = 6
 
     data["version"] = CURRENT_TEAM_VERSION
     return data
@@ -158,6 +169,17 @@ def migrate_plan(data: dict) -> dict:
         # v5 -> v6: Freitext-Notizen je Tag ("notes": Tag -> Text)
         data.setdefault("notes", {})
         version = 6
+
+    if version < 7:
+        # v6 -> v7: Kandidaten-Mechanik (candidate/chosen je Eintrag) und
+        # Freiwunsch-Kontingent; Vollplan-Dateien tragen Constraints direkt
+        for entries in data.get("schedule", {}).values():
+            for entry in entries:
+                entry.setdefault("candidate", False)
+                entry.setdefault("chosen", False)
+        for assistant in data.get("assistants", []):
+            assistant.get("constraints", {}).setdefault("free_wish_quota", None)
+        version = 7
 
     data["version"] = CURRENT_PLAN_VERSION
     return data

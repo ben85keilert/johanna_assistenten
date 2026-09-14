@@ -2,7 +2,7 @@ from pathlib import Path
 from openpyxl import Workbook
 from openpyxl.styles import PatternFill, Alignment, Font, Border, Side
 from openpyxl.utils import get_column_letter
-from models import MonthPlan, ShiftType
+from models import MonthPlan, ShiftType, is_effective
 import calendar
 
 
@@ -46,7 +46,8 @@ def export_excel(plan: MonthPlan, folder: str | Path) -> str:
         for day in range(1, days_in_month + 1):
             col = day + 1
             entries = plan.schedule.get(day, [])
-            matching = [e for e in entries if e.assistant_id == assistant.id]
+            matching = [e for e in entries
+                        if e.assistant_id == assistant.id and is_effective(e)]
 
             cell = ws.cell(row, col)
             if matching:
@@ -99,7 +100,7 @@ def export_excel(plan: MonthPlan, folder: str | Path) -> str:
 
         for entries in plan.schedule.values():
             for e in entries:
-                if e.assistant_id == assistant.id:
+                if e.assistant_id == assistant.id and is_effective(e):
                     if e.shift_type == ShiftType.FULL:
                         full_count += 1
                     elif e.shift_type == ShiftType.HALF_MORNING:

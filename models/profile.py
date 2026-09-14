@@ -21,6 +21,8 @@ class AssistantSettings:
     min_block_days: int = 1
     min_gap_days: int = 0
     oncall_attach: str = "none"
+    # Freiwunsch-Kontingent (None = "Alle": alle Blocks hart wie bisher)
+    free_wish_quota: int | None = None
 
 
 @dataclass
@@ -38,6 +40,7 @@ def settings_from_constraints(c: AssistantConstraints) -> AssistantSettings:
         min_block_days=c.min_block_days,
         min_gap_days=c.min_gap_days,
         oncall_attach=c.oncall_attach,
+        free_wish_quota=c.free_wish_quota,
     )
 
 
@@ -50,3 +53,4 @@ def apply_settings(c: AssistantConstraints, s: AssistantSettings) -> None:
     c.min_block_days = s.min_block_days
     c.min_gap_days = s.min_gap_days
     c.oncall_attach = s.oncall_attach
+    c.free_wish_quota = s.free_wish_quota

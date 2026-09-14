@@ -1,7 +1,10 @@
 from __future__ import annotations
 from dataclasses import dataclass
-from models import MonthPlan, ShiftType, DUTY_TYPES, is_duty
-from .engine import shift_weight, _day_needs, _needs_oncall, _works_on, ON_CALL_KINDS
+from models import MonthPlan, ShiftType, DUTY_TYPES, is_duty, is_effective
+from .engine import (
+    shift_weight, _day_needs, _needs_oncall, _works_on, ON_CALL_KINDS,
+    is_blocked, is_on_vacation,
+)
 import calendar
 
 
@@ -50,20 +53,70 @@ def validate(plan: MonthPlan) -> list[Warning]:
             )
         )
 
+    # Kandidaten-Tage ohne getroffene Wahl (Tag zaehlt oben schon als offen;
+    # dieser Hinweis erklaert, warum: es liegt eine Auswahl bereit)
+    label = {ShiftType.FULL: "Dienst", ShiftType.ON_CALL: "Rufbereitschaft"}
+    for day in range(1, days_in_month + 1):
+        entries = plan.schedule.get(day, [])
+        for shift_type, kind_label in label.items():
+            candidates = [
+                e for e in entries
+                if e.candidate and e.shift_type == shift_type
+            ]
+            if candidates and not any(e.chosen for e in candidates):
+                warnings.append(
+                    Warning(
+                        f"Tag {day}: mehrere Kandidaten fuer {kind_label}, "
+                        "keiner gewaehlt",
+                        "info",
+                    )
+                )
+
+    # Doppelbelegung: eine Person mit mehr als einem wirksamen Eintrag am Tag
+    # (z. B. fest gewaehlter Kandidat kollidiert mit anderem Eintrag)
+    for day in range(1, days_in_month + 1):
+        seen: dict[str, int] = {}
+        for e in plan.schedule.get(day, []):
+            if is_effective(e):
+                seen[e.assistant_id] = seen.get(e.assistant_id, 0) + 1
+        for assistant in plan.assistants:
+            if seen.get(assistant.id, 0) > 1:
+                warnings.append(
+                    Warning(
+                        f"{assistant.name}: mehrere Eintraege am {day}. "
+                        "(Dienst und Rufbereitschaft schliessen sich aus)",
+                        "warning",
+                    )
+                )
+
     for assistant in plan.assistants:
         if not assistant.active:
             continue
 
         assigned = 0.0
         oncall = 0
-        for entries in plan.schedule.values():
+        overridden_wishes = []
+        for day, entries in plan.schedule.items():
             for e in entries:
-                if e.assistant_id != assistant.id:
+                if e.assistant_id != assistant.id or not is_effective(e):
                     continue
                 if is_duty(e.shift_type):
                     assigned += shift_weight(e.shift_type)
                 elif e.shift_type == ShiftType.ON_CALL:
                     oncall += 1
+                # Wirksamer Eintrag auf eigenem Block-Tag = ueberplanter
+                # Freiwunsch (Urlaub wird nie ueberplant und hat Vorrang)
+                if (is_blocked(assistant, day, year, month)
+                        and not is_on_vacation(assistant, day, year, month)):
+                    overridden_wishes.append(day)
+        if overridden_wishes:
+            days_text = ", ".join(f"{d}." for d in sorted(overridden_wishes))
+            warnings.append(
+                Warning(
+                    f"Freiwunsch ueberplant: {assistant.name} am {days_text}",
+                    "warning",
+                )
+            )
 
         # Ueber Maximum / unter Minimum
         min_shifts = assistant.constraints.min_shifts

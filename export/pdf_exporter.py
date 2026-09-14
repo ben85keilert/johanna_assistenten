@@ -9,7 +9,7 @@ from reportlab.lib.units import cm
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 from reportlab.lib import colors
 
-from models import MonthPlan, ShiftType
+from models import MonthPlan, ShiftType, is_effective
 
 SHIFT_LABELS = {
     ShiftType.FULL: "VOLL",
@@ -46,7 +46,8 @@ def _plan_table(plan: MonthPlan, first_day: int, last_day: int, day_width: float
         row = [assistant.name]
         for day in days:
             entries = plan.schedule.get(day, [])
-            matching = [e for e in entries if e.assistant_id == assistant.id]
+            matching = [e for e in entries
+                        if e.assistant_id == assistant.id and is_effective(e)]
             row.append(SHIFT_LABELS.get(matching[0].shift_type, "") if matching else "")
         data.append(row)
 
@@ -77,7 +78,8 @@ def _plan_table(plan: MonthPlan, first_day: int, last_day: int, day_width: float
             continue
         for col, day in enumerate(days, 1):
             entries = plan.schedule.get(day, [])
-            if any(e.assistant_id == assistant.id for e in entries):
+            if any(e.assistant_id == assistant.id and is_effective(e)
+                   for e in entries):
                 style_list.append(("BACKGROUND", (col, row), (col, row), color))
 
     table.setStyle(TableStyle(style_list))
@@ -136,7 +138,7 @@ def export_pdf(plan: MonthPlan, folder: str | Path) -> str:
         full = vm = nm = rb = 0
         for entries in plan.schedule.values():
             for e in entries:
-                if e.assistant_id == assistant.id:
+                if e.assistant_id == assistant.id and is_effective(e):
                     if e.shift_type == ShiftType.FULL:
                         full += 1
                     elif e.shift_type == ShiftType.HALF_MORNING:
