@@ -4,7 +4,9 @@ from PySide6.QtWidgets import QStyledItemDelegate, QStyleOptionViewItem, QStyle
 from PySide6.QtCore import Qt, QRect, QSize
 from PySide6.QtGui import QPainter, QColor, QFont, QPen
 
-from models import ShiftType
+from PySide6.QtCore import QPoint
+
+from models import ShiftType, is_effective
 from scheduling.engine import is_on_vacation, is_blocked
 from persistence import AppSettings
 from . import theme
@@ -25,6 +27,8 @@ SHIFT_COLOR_KEYS = {
 }
 # Deckkraft nicht fixierter (gewuerfelter) Eintraege
 GENERATED_ALPHA = 110
+# Deckkraft nicht gewaehlter Kandidaten (nur Vorschlaege)
+CANDIDATE_ALPHA = 50
 
 
 class CellDelegate(QStyledItemDelegate):
@@ -69,12 +73,24 @@ class CellDelegate(QStyledItemDelegate):
 
         painter.save()
 
+        # Kandidaten-Zustaende: unbewaehlter Vorschlag vs. getroffene Wahl
+        is_open_candidate = entry is not None and entry.candidate and not entry.chosen
+        # "In Planung": gewuerfelt oder vom Wuerfeln gewaehlter Kandidat,
+        # jeweils noch nicht fixiert -> transparenter + Punkt
+        in_planning = (
+            entry is not None and not entry.locked
+            and (entry.generated or (entry.candidate and entry.chosen))
+        )
+
         # Grundflaeche (weiss bzw. Wochenend-Grau), darueber die Typfarbe:
-        # voll deckend bei festen Eintraegen, transparent bei gewuerfelten
+        # voll deckend bei festen Eintraegen, transparent bei gewuerfelten,
+        # sehr blass bei nicht gewaehlten Kandidaten
         painter.fillRect(option.rect, WEEKEND_COLOR if weekend else QColor(255, 255, 255))
         if entry is not None:
             overlay = self._entry_color(SHIFT_COLOR_KEYS.get(entry.shift_type, ""))
-            if entry.generated and not entry.locked:
+            if is_open_candidate:
+                overlay.setAlpha(CANDIDATE_ALPHA)
+            elif in_planning:
                 overlay.setAlpha(GENERATED_ALPHA)
             painter.fillRect(option.rect, overlay)
         elif vacation:
@@ -82,26 +98,52 @@ class CellDelegate(QStyledItemDelegate):
         elif blocked:
             painter.fillRect(option.rect, self._entry_color("BLOCK"))
 
+        # Nicht gewaehlter Kandidat: gestrichelter Rahmen in der Typfarbe
+        if is_open_candidate:
+            pen = QPen(self._entry_color(
+                SHIFT_COLOR_KEYS.get(entry.shift_type, "")
+            ).darker(130), 2)
+            pen.setStyle(Qt.PenStyle.DashLine)
+            painter.setPen(pen)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawRect(option.rect.adjusted(2, 2, -2, -2))
+
         # Text
         text = ""
         if entry is not None:
             text = SHIFT_LABELS.get(entry.shift_type, "")
+            if is_open_candidate:
+                text += "?"
         elif vacation:
             text = "U"
         elif blocked:
             text = "X"
         if text:
             font = QFont()
-            font.setBold(entry is not None)
+            font.setBold(entry is not None and not is_open_candidate)
             painter.setFont(font)
-            painter.setPen(QColor(60, 60, 60) if entry is None else QColor(0, 0, 0))
+            painter.setPen(QColor(60, 60, 60) if entry is None or is_open_candidate
+                           else QColor(0, 0, 0))
             painter.drawText(option.rect, Qt.AlignmentFlag.AlignCenter, text)
 
-        # Punkt oben links: zufaellig vergeben (noch nicht fixiert)
-        if entry is not None and entry.generated and not entry.locked:
+        # Punkt oben links: zufaellig vergeben/gewaehlt (noch nicht fixiert)
+        if in_planning:
             painter.setBrush(QColor(80, 80, 80))
             painter.setPen(Qt.PenStyle.NoPen)
             painter.drawEllipse(option.rect.left() + 4, option.rect.top() + 4, 6, 6)
+
+        # Ueberplanter Freiwunsch: wirksamer Eintrag auf eigenem Block-Tag
+        # -> kleines Warn-Dreieck unten rechts in der Block-Farbe
+        if entry is not None and is_effective(entry) and blocked:
+            r = option.rect
+            triangle = [
+                QPoint(r.right() - 10, r.bottom() - 1),
+                QPoint(r.right() - 1, r.bottom() - 10),
+                QPoint(r.right() - 1, r.bottom() - 1),
+            ]
+            painter.setBrush(self._entry_color("BLOCK").darker(120))
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.drawPolygon(triangle)
 
         # Schloss oben rechts: fixiert
         if entry is not None and entry.locked:

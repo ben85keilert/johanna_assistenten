@@ -23,14 +23,52 @@ Dienstblock - auch bei "both" - damit RB = Dienste aufgeht.
 min_gap_days ist der Mindestabstand in freien Tagen zwischen zwei
 Einsatzbloecken derselben Person (Dienst und RB zusammen gezaehlt) - eine
 harte Regel, die der Generator nie unterschreitet.
+
+Kandidaten (Stufe 2): Tage koennen mehrere manuelle Vorschlaege fuer
+denselben Dienst/RB tragen (ShiftEntry.candidate). Der Generator waehlt vor
+der normalen Fuellung einen zulaessigen Kandidaten (chosen=True); nicht
+gewaehlte Kandidaten zaehlen nirgends mit (is_effective).
+
+Freiwunsch-Kontingent (Stufe 2): Block-Tage sind Wuensche. Ohne Kontingent
+(free_wish_quota=None) bleiben sie hart wie Urlaub. Mit Kontingent N haben
+die chronologisch ersten N Block-Tage des Monats Vorrang (hart), weitere
+Nachrang: Bleibt ein Tag sonst offen, darf ein Nachrang-Wunsch ueberplant
+werden - das wird als Conflict gemeldet (Dialog in der UI). Urlaub, hartes
+Max, Folgen und Mindestabstand werden auch dabei nie verletzt.
 """
 from __future__ import annotations
 import random
 import calendar
+from dataclasses import dataclass, field
 from datetime import date
-from models import MonthPlan, ShiftEntry, ShiftType, DUTY_TYPES, is_duty
+from models import (
+    MonthPlan, ShiftEntry, ShiftType, DUTY_TYPES, is_duty, is_effective,
+    blocked_days,
+)
 
 ON_CALL_KINDS = (ShiftType.ON_CALL,)
+
+
+@dataclass
+class ConflictOption:
+    assistant_id: str | None    # None = Tag offen lassen
+    overrides_wish: bool
+    label: str
+
+
+@dataclass
+class Conflict:
+    day: int
+    kind: str                   # "dienst" | "rb"
+    options: list[ConflictOption]
+    proposal: int               # Index des empfohlenen Vorschlags
+    applied: int = 0            # Index der tatsaechlich angewandten Option
+
+
+@dataclass
+class GenerationResult:
+    plan: MonthPlan
+    conflicts: list[Conflict] = field(default_factory=list)
 
 
 def attach_spans(attach: str, start: int, block_len: int) -> list[range]:
@@ -86,16 +124,50 @@ def is_unavailable(assistant, day: int, year: int, month: int) -> bool:
     )
 
 
+def wish_priority(assistant, day: int, year: int, month: int) -> str | None:
+    """Rang eines Block-Tags (Freiwunsch): "vorrang" (hart), "nachrang"
+    (darf im Konfliktfall ueberplant werden) oder None (kein Block).
+
+    Ohne Kontingent (free_wish_quota=None) sind alle Wuensche Vorrang -
+    das bisherige harte Verhalten. Mit Kontingent N haben die chronologisch
+    ersten N Block-Tage des Monats Vorrang, alle weiteren Nachrang."""
+    if not is_blocked(assistant, day, year, month):
+        return None
+    quota = assistant.constraints.free_wish_quota
+    if quota is None:
+        return "vorrang"
+    month_blocked = sorted(
+        d for d in blocked_days(assistant.constraints)
+        if d.year == year and d.month == month
+    )
+    return "vorrang" if month_blocked.index(date(year, month, day)) < quota else "nachrang"
+
+
+def wish_overhang(assistant, year: int, month: int) -> int:
+    """Anzahl der Nachrang-Wuensche dieses Monats (Wuensche ueber dem
+    Kontingent). 0, wenn kein Kontingent gesetzt ist."""
+    quota = assistant.constraints.free_wish_quota
+    if quota is None:
+        return 0
+    count = sum(
+        1 for d in blocked_days(assistant.constraints)
+        if d.year == year and d.month == month
+    )
+    return max(0, count - quota)
+
+
 def shift_weight(shift_type: ShiftType) -> float:
     return 0.5 if shift_type in (ShiftType.HALF_MORNING, ShiftType.HALF_AFTERNOON) else 1.0
 
 
 def _works_on(plan: MonthPlan, assistant_id: str, day: int,
               kinds: tuple[ShiftType, ...] | None = None) -> bool:
-    """kinds=None: irgendein Eintrag (Tages-Exklusivitaet),
-    sonst nur Eintraege der angegebenen Dienstarten."""
+    """kinds=None: irgendein wirksamer Eintrag (Tages-Exklusivitaet),
+    sonst nur Eintraege der angegebenen Dienstarten. Nicht gewaehlte
+    Kandidaten sind nur Vorschlaege und zaehlen nicht."""
     return any(
-        e.assistant_id == assistant_id and (kinds is None or e.shift_type in kinds)
+        e.assistant_id == assistant_id and is_effective(e)
+        and (kinds is None or e.shift_type in kinds)
         for e in plan.schedule.get(day, [])
     )
 
@@ -158,8 +230,12 @@ def _violates_min_gap(plan: MonthPlan, assistant, first_day: int, last_day: int,
 
 def _day_needs(plan: MonthPlan, day: int) -> ShiftType | None:
     """Welcher Tagesdienst fehlt an diesem Tag noch? None = Tag ist abgedeckt.
-    Rufbereitschafts-Eintraege zaehlen hier nicht als Abdeckung."""
-    entries = [e for e in plan.schedule.get(day, []) if is_duty(e.shift_type)]
+    Rufbereitschafts-Eintraege und nicht gewaehlte Kandidaten zaehlen hier
+    nicht als Abdeckung."""
+    entries = [
+        e for e in plan.schedule.get(day, [])
+        if is_duty(e.shift_type) and is_effective(e)
+    ]
     if any(e.shift_type == ShiftType.FULL for e in entries):
         return None
     has_vm = any(e.shift_type == ShiftType.HALF_MORNING for e in entries)
@@ -174,9 +250,10 @@ def _day_needs(plan: MonthPlan, day: int) -> ShiftType | None:
 
 
 def _needs_oncall(plan: MonthPlan, day: int) -> bool:
-    """True, wenn an diesem Tag noch keine Rufbereitschaft vergeben ist."""
+    """True, wenn an diesem Tag noch keine wirksame Rufbereitschaft vergeben ist."""
     return not any(
-        e.shift_type == ShiftType.ON_CALL for e in plan.schedule.get(day, [])
+        e.shift_type == ShiftType.ON_CALL and is_effective(e)
+        for e in plan.schedule.get(day, [])
     )
 
 
@@ -186,30 +263,41 @@ def _add_entry(plan: MonthPlan, day: int, assistant_id: str, shift_type: ShiftTy
     )
 
 
-def generate(plan: MonthPlan, seed: int | None = None) -> MonthPlan:
+def generate(plan: MonthPlan, seed: int | None = None,
+             resolver=None) -> GenerationResult:
+    """Wuerfelt den Plan. resolver: optionaler Callable(Conflict) ->
+    ConflictOption, der Konflikte entscheidet (Dialog-Wiederholungslauf);
+    ohne Resolver wird jeweils der Vorschlag angewendet."""
     rng = random.Random(seed) if seed is not None else random.Random()
     year, month = plan.year, plan.month
     days_in_month = calendar.monthrange(year, month)[1]
+    conflicts: list[Conflict] = []
 
-    # 1. Nicht fixierte Zufalls-Eintraege entfernen (Neuwuerfeln)
+    # 1. Nicht fixierte Zufalls-Eintraege entfernen (Neuwuerfeln); nicht
+    #    fixierte Kandidaten-Wahlen zuruecksetzen (werden neu getroffen)
     for day in list(plan.schedule.keys()):
         plan.schedule[day] = [
             e for e in plan.schedule[day] if not e.generated or e.locked
         ]
+        for e in plan.schedule[day]:
+            if e.candidate and e.chosen and not e.locked:
+                e.chosen = False
         if not plan.schedule[day]:
             del plan.schedule[day]
 
     active = [a for a in plan.assistants if a.active]
     if not active:
-        return plan
+        return GenerationResult(plan)
+    by_id = {a.id: a for a in active}
 
     # 2. Zielzahlen und bereits vergebene Dienste (VOLL=1, VM/NM=0,5);
-    #    Rufbereitschaften zaehlen separat
+    #    Rufbereitschaften zaehlen separat. Nicht gewaehlte Kandidaten
+    #    zaehlen nicht mit
     assigned = {a.id: 0.0 for a in active}
     oncall_assigned = {a.id: 0 for a in active}
     for entries in plan.schedule.values():
         for e in entries:
-            if e.assistant_id not in assigned:
+            if e.assistant_id not in assigned or not is_effective(e):
                 continue
             if is_duty(e.shift_type):
                 assigned[e.assistant_id] += shift_weight(e.shift_type)
@@ -249,6 +337,25 @@ def generate(plan: MonthPlan, seed: int | None = None) -> MonthPlan:
         # Helfer unter ihrem Minimum zuerst, dann die mit den wenigsten Diensten
         return min(pool, key=lambda a: (0 if below_min(a) else 1, assigned[a.id], rng.random()))
 
+    def _wish_conflict(day: int, kind: str, pool: list, place) -> None:
+        """Konfliktstufe: Tag ist nur durch Ueberplanen eines Nachrang-
+        Freiwunschs besetzbar. pool ist nach Vorschlagsguete sortiert;
+        ohne Resolver wird der Vorschlag angewendet, sonst entscheidet er.
+        Der Konflikt wird fuer den Dialog gemeldet."""
+        options = [
+            ConflictOption(a.id, True, f"{a.name} (ueberplant Freiwunsch)")
+            for a in pool
+        ]
+        options.append(ConflictOption(None, False, "Tag offen lassen"))
+        conflict = Conflict(day=day, kind=kind, options=options, proposal=0)
+        selected = options[0] if resolver is None else resolver(conflict)
+        if selected not in options:
+            selected = options[conflict.proposal]
+        conflict.applied = options.index(selected)
+        if selected.assistant_id is not None:
+            place(by_id[selected.assistant_id])
+        conflicts.append(conflict)
+
     def _rb_span_free(a, rb_days: range) -> bool:
         """Passt ein angehaengter RB-Block auf diese Tage?"""
         if rb_days[0] < 1 or rb_days[-1] > days_in_month:
@@ -263,6 +370,50 @@ def generate(plan: MonthPlan, seed: int | None = None) -> MonthPlan:
             plan, a.id, rb_days[0], rb_days[-1], ON_CALL_KINDS
         )
         return rb_run <= a.constraints.max_consecutive_days
+
+    # 2b. Kandidatenwahl Dienst: Tage mit mehreren manuellen VOLL-Vorschlaegen
+    #     bekommen vor allem anderen einen Gewaehlten (chosen=True) - nach den
+    #     ueblichen Fairness-Regeln; harte Regeln gelten auch fuer Kandidaten
+    def _candidate_entries(day: int, shift_type: ShiftType) -> list[ShiftEntry]:
+        return [
+            e for e in plan.schedule.get(day, [])
+            if e.candidate and not e.chosen and e.shift_type == shift_type
+            and e.assistant_id in by_id
+        ]
+
+    def _feasible_duty_candidate(a, day: int) -> bool:
+        return (
+            not _works_on(plan, a.id, day)
+            and not is_unavailable(a, day, year, month)
+            and not exceeds_consecutive(plan, a.id, day)
+            and not _violates_min_gap(plan, a, day, day, days_in_month)
+        )
+
+    for day in range(1, days_in_month + 1):
+        if _day_needs(plan, day) != ShiftType.FULL:
+            continue
+        entries = _candidate_entries(day, ShiftType.FULL)
+        if not entries:
+            continue
+        pool = [by_id[e.assistant_id] for e in entries
+                if _feasible_duty_candidate(by_id[e.assistant_id], day)]
+        # Kandidaten sind ausdrueckliche Wuensche des Planers: die weiche
+        # Auto-Zielgrenze zaehlt nur zur Bevorzugung, ein explizites Max
+        # bleibt hart
+        preferred = [a for a in pool if assigned[a.id] + 1.0 <= duty_cap(a)]
+        pool = preferred or [
+            a for a in pool
+            if a.constraints.max_shifts is None
+            or assigned[a.id] + 1.0 <= a.constraints.max_shifts
+        ]
+        if not pool:
+            continue
+        chosen_assistant = pick(pool)
+        for e in entries:
+            if e.assistant_id == chosen_assistant.id:
+                e.chosen = True
+                break
+        assigned[chosen_assistant.id] += 1.0
 
     block_assistants = [a for a in active if a.constraints.min_block_days > 1]
     single_assistants = [a for a in active if a.constraints.min_block_days <= 1]
@@ -374,6 +525,29 @@ def generate(plan: MonthPlan, seed: int | None = None) -> MonthPlan:
                      or assigned[a.id] + weight <= a.constraints.max_shifts)
             ]
         if not available:
+            # Konfliktstufe: Nachrang-Freiwunsch ueberplanen. Urlaub,
+            # Vorrang-Wuensche und harte Grenzen bleiben unantastbar
+            pool = [
+                a for a in active
+                if wish_priority(a, day, year, month) == "nachrang"
+                and not is_on_vacation(a, day, year, month)
+                and not _works_on(plan, a.id, day)
+                and not exceeds_consecutive(plan, a.id, day)
+                and not _violates_min_gap(plan, a, day, day, days_in_month)
+                and (a.constraints.max_shifts is None
+                     or assigned[a.id] + weight <= a.constraints.max_shifts)
+            ]
+            if pool:
+                # Vorschlag: groesster Wunsch-Ueberhang, dann wenigste Dienste
+                pool.sort(key=lambda a: (
+                    -wish_overhang(a, year, month), assigned[a.id], rng.random()
+                ))
+
+                def place_duty(a, d=day, w=weight, n=needed):
+                    _add_entry(plan, d, a.id, n)
+                    assigned[a.id] += w
+
+                _wish_conflict(day, "dienst", pool, place_duty)
             continue
 
         chosen = pick(available)
@@ -410,6 +584,39 @@ def generate(plan: MonthPlan, seed: int | None = None) -> MonthPlan:
             pool,
             key=lambda a: (oncall_assigned[a.id] - oncall_target[a.id], rng.random()),
         )
+
+    # 5b. Kandidatenwahl Rufbereitschaft: Tage mit mehreren manuellen
+    #     RB-Vorschlaegen bekommen zuerst einen Gewaehlten (nie am eigenen
+    #     wirksamen Diensttag)
+    for day in range(1, days_in_month + 1):
+        if not _needs_oncall(plan, day):
+            continue
+        entries = _candidate_entries(day, ShiftType.ON_CALL)
+        if not entries:
+            continue
+        pool = [
+            by_id[e.assistant_id] for e in entries
+            if not _works_on(plan, e.assistant_id, day)
+            and not is_unavailable(by_id[e.assistant_id], day, year, month)
+            and not exceeds_consecutive(plan, e.assistant_id, day, ON_CALL_KINDS)
+            and not _violates_min_gap(plan, by_id[e.assistant_id], day, day,
+                                      days_in_month)
+        ]
+        # RB-Ziel nur zur Bevorzugung, nicht als Ausschluss - der Tag traegt
+        # ausdrueckliche Vorschlaege
+        preferred = [
+            a for a in pool
+            if oncall_assigned[a.id] + 1 <= oncall_target[a.id] + 0.5
+        ]
+        pool = preferred or pool
+        if not pool:
+            continue
+        chosen_assistant = oncall_pick(pool)
+        for e in entries:
+            if e.assistant_id == chosen_assistant.id:
+                e.chosen = True
+                break
+        oncall_assigned[chosen_assistant.id] += 1
 
     # Blockvergabe fuer die Rufbereitschaft (weite Anreise)
     rng.shuffle(block_assistants)
@@ -452,6 +659,27 @@ def generate(plan: MonthPlan, seed: int | None = None) -> MonthPlan:
             # Gleichstand wird anschliessend in Schritt 6 repariert
             available = oncall_candidates(day, active, respect_target=False)
         if not available:
+            # Konfliktstufe wie beim Dienst: Nachrang-Freiwunsch ueberplanen
+            pool = [
+                a for a in active
+                if wish_priority(a, day, year, month) == "nachrang"
+                and not is_on_vacation(a, day, year, month)
+                and not _works_on(plan, a.id, day)
+                and not exceeds_consecutive(plan, a.id, day, ON_CALL_KINDS)
+                and not _violates_min_gap(plan, a, day, day, days_in_month)
+            ]
+            if pool:
+                pool.sort(key=lambda a: (
+                    -wish_overhang(a, year, month),
+                    oncall_assigned[a.id] - oncall_target[a.id],
+                    rng.random(),
+                ))
+
+                def place_oncall(a, d=day):
+                    _add_entry(plan, d, a.id, ShiftType.ON_CALL)
+                    oncall_assigned[a.id] += 1
+
+                _wish_conflict(day, "rb", pool, place_oncall)
             continue
 
         chosen = oncall_pick(available)
@@ -495,4 +723,4 @@ def generate(plan: MonthPlan, seed: int | None = None) -> MonthPlan:
             if moved:
                 break
 
-    return plan
+    return GenerationResult(plan, conflicts)

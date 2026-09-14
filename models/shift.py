@@ -27,3 +27,15 @@ class ShiftEntry:
     # True = vom Zufallsgenerator vergeben (wird beim Neuwuerfeln ersetzt,
     # solange nicht locked); False = von Hand gesetzt (bleibt immer stehen)
     generated: bool = False
+    # Kandidaten-Mechanik (nur FULL und ON_CALL): candidate=True markiert
+    # einen von mehreren manuellen Vorschlaegen fuer den Tag - er zaehlt
+    # erst als Abdeckung/Soll, wenn chosen=True (Wahl durch Wuerfeln oder
+    # von Hand; Neuwuerfeln setzt eine nicht fixierte Wahl zurueck)
+    candidate: bool = False
+    chosen: bool = False
+
+
+def is_effective(entry: ShiftEntry) -> bool:
+    """Zaehlt dieser Eintrag als echte Belegung? Nicht gewaehlte
+    Kandidaten sind nur Vorschlaege - keine Abdeckung, kein Soll."""
+    return not entry.candidate or entry.chosen
