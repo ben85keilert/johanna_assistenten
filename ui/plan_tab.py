@@ -148,7 +148,10 @@ class PlanTab(QWidget):
         dice_layout.addWidget(self.generate_btn)
 
         self.reset_btn = QPushButton("Zuruecksetzen")
-        self.reset_btn.setToolTip("Loescht alle nicht fixierten Eintraege.")
+        self.reset_btn.setToolTip(
+            "Loescht alle nicht fixierten Zufalls-Eintraege. "
+            "Manuell Gesetztes (auch Kandidaten) bleibt stehen."
+        )
         self.reset_btn.clicked.connect(self.reset_schedule)
         dice_layout.addWidget(self.reset_btn)
 
@@ -791,14 +794,23 @@ class PlanTab(QWidget):
             return
         reply = QMessageBox.question(
             self, "Zuruecksetzen",
-            "Alle nicht fixierten Eintraege loeschen?",
+            "Alle nicht fixierten Zufalls-Eintraege loeschen?\n"
+            "Manuell gesetzte Eintraege bleiben erhalten.",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
         )
         if reply != QMessageBox.StandardButton.Yes:
             return
 
         for day in list(self.plan.schedule.keys()):
-            self.plan.schedule[day] = [e for e in self.plan.schedule[day] if e.locked]
+            # Wie beim Neuwuerfeln: nur Zufalls-Eintraege fliegen raus,
+            # manuell Gesetztes (inkl. Kandidaten) bleibt immer stehen.
+            kept = [e for e in self.plan.schedule[day]
+                    if e.locked or not e.generated]
+            for e in kept:
+                # Eine nicht fixierte Wuerfel-Wahl ist Teil des Zufalls
+                if e.candidate and not e.locked:
+                    e.chosen = False
+            self.plan.schedule[day] = kept
             if not self.plan.schedule[day]:
                 del self.plan.schedule[day]
         self.refresh_display()

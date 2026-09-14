@@ -21,14 +21,27 @@ Eine PySide6-Anwendung zur Verwaltung und Planung von Assistentendiensten für e
 
 ## Installation
 
-```bash
-pip install -r requirements.txt
+Das Projekt wird mit [uv](https://docs.astral.sh/uv/) verwaltet. Einmalig uv
+installieren (Windows):
+
+```powershell
+winget install astral-sh.uv
 ```
+
+Dann im Projektordner:
+
+```bash
+uv sync
+```
+
+Das legt automatisch die virtuelle Umgebung `.venv\` an (mit dem in
+`.python-version` festgelegten Python) und installiert alle Abhängigkeiten aus
+`pyproject.toml` exakt in den Versionen aus `uv.lock`.
 
 ## Starten
 
 ```bash
-python main.py
+uv run main.py
 ```
 
 ## Struktur
@@ -40,7 +53,8 @@ python main.py
 ├── scheduling/             # Planungs-Algorithmus + Validator
 ├── export/                 # CSV, Excel, PDF Export
 ├── persistence/            # JSON Speichern/Laden
-└── requirements.txt        # Abhängigkeiten
+├── pyproject.toml          # Projekt-Metadaten + Abhängigkeiten (uv)
+└── uv.lock                 # Exakte, reproduzierbare Versionen (uv)
 ```
 
 ## Windows-Build (.exe)
@@ -51,18 +65,19 @@ einem Windows-Rechner oder automatisch über GitHub Actions.
 
 ### Variante A: Manuell auf einem Windows-Rechner
 
-1. [Python 3.12+](https://www.python.org/downloads/windows/) installieren
-   (Häkchen bei „Add python.exe to PATH" setzen).
+1. [uv](https://docs.astral.sh/uv/) installieren:
+   ```powershell
+   winget install astral-sh.uv
+   ```
+   (Ein passendes Python lädt uv bei Bedarf selbst herunter.)
 2. Projekt herunterladen/klonen und in der Eingabeaufforderung in den Projektordner wechseln.
-3. Virtuelle Umgebung anlegen und Abhängigkeiten installieren:
+3. Abhängigkeiten inkl. PyInstaller installieren:
    ```bat
-   python -m venv .venv
-   .venv\Scripts\activate
-   pip install -r requirements.txt pyinstaller
+   uv sync --group build
    ```
 4. Build starten:
    ```bat
-   pyinstaller --noconsole --onedir --name JohannaAssistenten main.py
+   uv run pyinstaller --noconsole --onedir --name JohannaAssistenten main.py
    ```
 5. Das fertige Programm liegt in `dist\JohannaAssistenten\` —
    den ganzen Ordner kopieren und `JohannaAssistenten.exe` starten.
@@ -94,7 +109,8 @@ baut die Windows-Version in der Cloud:
 
 ## Technologie
 
-- **PySide6** – Qt für Python
+- **uv** – Paket- und Umgebungsverwaltung (`pyproject.toml` + `uv.lock`)
+- **PySide6** – Qt für Python (< 6.9, siehe Kommentar in `pyproject.toml`)
 - **openpyxl** – Excel-Export
 - **reportlab** – PDF-Export
-- **Python 3.10+**
+- **Python 3.10+** (Entwicklung: 3.12 via `.python-version`)

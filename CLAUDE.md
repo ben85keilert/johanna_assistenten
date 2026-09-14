@@ -12,9 +12,13 @@ The application is German-localized and uses JSON for persistence.
 
 ## Running & Development
 
+The project is managed with **uv** (`pyproject.toml` + `uv.lock`, venv in `.venv\`,
+Python version pinned in `.python-version`).
+
 ```bash
-python main.py                      # run the app
-pip install -r requirements.txt     # install dependencies
+uv sync                             # create .venv and install dependencies
+uv run main.py                      # run the app
+uv sync --group build               # additionally install PyInstaller
 ```
 
 Windows builds: see README (PyInstaller on Windows, or the `build-windows.yml` GitHub Actions workflow, triggered manually or by `v*` tags).
