@@ -68,13 +68,14 @@ class TeamTab(QWidget):
             page_layout = QVBoxLayout()
 
             table = QTableWidget()
-            table.setColumnCount(8)
+            table.setColumnCount(9)
             # Max steht jeweils links von Min: Max begrenzt Min, wird also
             # zuerst eingestellt (sonst zieht ein spaeter gesetztes Max das
             # Min wieder zurueck)
             table.setHorizontalHeaderLabels([
                 "Farbe", "Name", "Max. Dienste", "Min. Dienste",
-                "Max. Folge", "Min. Block", "Abstand", "RB anhaengen",
+                "Max. Folge", "Min. Block", "Abstand", "Freiwuensche",
+                "RB anhaengen",
             ])
             table.itemChanged.connect(
                 lambda item, i=idx: self.on_name_edited(i, item)
@@ -174,6 +175,9 @@ class TeamTab(QWidget):
                     other.set_value(value)
         elif field == "gap":
             s.min_gap_days = value
+        elif field == "quota":
+            # Freiwunsch-Kontingent; "Alle" (None) = alle Blocks hart
+            s.free_wish_quota = None if value < 0 else value
 
         self.profiles_changed.emit()
 
@@ -261,6 +265,20 @@ class TeamTab(QWidget):
                 )
                 table.setCellWidget(i, 6, gap_stepper)
 
+                quota_stepper = self._make_stepper(
+                    profile_idx, assistant, "quota", "Freiwuensche",
+                    -1 if s.free_wish_quota is None else s.free_wish_quota,
+                    -1, 31, special_min_text="Alle",
+                )
+                quota_stepper.setToolTip(
+                    "Freiwunsch-Kontingent: so viele Block-Tage im Monat "
+                    "haben Vorrang (werden nie ueberplant). Weitere "
+                    "Block-Tage haben Nachrang und duerfen im Konfliktfall "
+                    "ueberplant werden - Urlaub nie.\n"
+                    "'Alle' = kein Kontingent, alle Blocks hart wie bisher."
+                )
+                table.setCellWidget(i, 7, quota_stepper)
+
                 attach_combo = QComboBox()
                 for label, value in ATTACH_OPTIONS:
                     attach_combo.addItem(label, value)
@@ -279,7 +297,7 @@ class TeamTab(QWidget):
                     lambda _, c=attach_combo, p=profile_idx, aid=assistant.id:
                     self.on_attach_changed(p, aid, c.currentData())
                 )
-                table.setCellWidget(i, 7, attach_combo)
+                table.setCellWidget(i, 8, attach_combo)
 
             # Kompakte Spalten: schmale Namensspalte, Rest nach Inhalt;
             # rechts darf Rand bleiben
@@ -288,9 +306,9 @@ class TeamTab(QWidget):
             header.setSectionResizeMode(QHeaderView.ResizeMode.Fixed)
             table.setColumnWidth(0, 56)
             table.setColumnWidth(1, 120)
-            for col in (2, 3, 4, 5, 6):
+            for col in (2, 3, 4, 5, 6, 7):
                 table.setColumnWidth(col, theme.STEPPER_WIDTH)
-            table.setColumnWidth(7, 110)
+            table.setColumnWidth(8, 110)
 
         self._refreshing = False
         self.add_btn.setEnabled(len(self.plan.assistants) < 10)

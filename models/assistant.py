@@ -25,6 +25,11 @@ class AssistantConstraints:
     # aufgeteilt, "none" = aus) - fuer Helfer mit weiter Anreise, die am
     # Stueck vor Ort sein wollen
     oncall_attach: str = "none"
+    # Freiwunsch-Kontingent: None = "Alle" (alle Block-Tage hart wie Urlaub,
+    # bisheriges Verhalten). Zahl N = die chronologisch ersten N Block-Tage
+    # des Monats haben Vorrang (hart), weitere Nachrang (duerfen im
+    # Konfliktfall ueberplant werden; Urlaub bleibt immer zwingend)
+    free_wish_quota: int | None = None
     # Soll-Dienste als Spanne; None = "Auto" (gleichmaessig verteilen)
     min_shifts: int | None = None
     max_shifts: int | None = None

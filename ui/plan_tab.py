@@ -2,23 +2,25 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QTableWidget,
     QTableWidgetItem, QLabel, QSpinBox, QCheckBox, QMessageBox,
     QHeaderView, QMenu, QAbstractItemView, QButtonGroup, QComboBox,
-    QGroupBox
+    QGroupBox, QDialog, QPlainTextEdit
 )
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QFont
 
 from models import (
-    MonthPlan, ShiftEntry, ShiftType,
+    MonthPlan, ShiftEntry, ShiftType, is_effective,
     absence_days, set_absence_days, blocked_days, set_blocked_days,
 )
 from persistence import AppSettings
 from datetime import date
 import calendar
 import math
+import random
 from . import theme
 from .widgets.month_selector import MonthSelector
 from .widgets.big_stepper import BigStepper
 from .cell_delegate import CellDelegate
+from .conflict_dialog import ConflictDialog
 from scheduling.engine import generate
 from scheduling.validator import validate
 
@@ -29,8 +31,12 @@ STAMP_NM = "nm"
 STAMP_ONCALL = "oncall"
 STAMP_VACATION = "vacation"
 STAMP_BLOCK = "block"
+STAMP_NOTE = "note"
 STAMP_LOCK = "lock"
 STAMP_DELETE = "delete"
+
+# Notizsymbol im Tageskopf, wenn eine Notiz vorhanden ist
+NOTE_ICON = "\U0001F4DD"
 
 STAMP_SHIFTS = {
     STAMP_FULL: ShiftType.FULL,
@@ -38,6 +44,10 @@ STAMP_SHIFTS = {
     STAMP_NM: ShiftType.HALF_AFTERNOON,
     STAMP_ONCALL: ShiftType.ON_CALL,
 }
+
+# Dienstarten mit Kandidaten-Mechanik: mehrere manuelle Vorschlaege je Tag,
+# aus denen gewaehlt wird (VM/NM bleiben Ausnahme-Dienste ohne Kandidaten)
+CANDIDATE_TYPES = (ShiftType.FULL, ShiftType.ON_CALL)
 
 WEEKDAYS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
 
@@ -101,6 +111,7 @@ class PlanTab(QWidget):
             (STAMP_ONCALL, "Rufbereitschaft"),
             (STAMP_VACATION, "Urlaub"),
             (STAMP_BLOCK, "Block"),
+            (STAMP_NOTE, "Notiz"),
             (STAMP_LOCK, "Fixieren"),
             (STAMP_DELETE, "Loeschen"),
         ]:
@@ -173,9 +184,16 @@ class PlanTab(QWidget):
         self.table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.table.customContextMenuRequested.connect(self.show_context_menu)
         self.table.cellClicked.connect(self.on_cell_clicked)
-        self.delegate = CellDelegate(lambda: self.plan)
+        self.table.itemSelectionChanged.connect(self._update_note_line)
+        self.delegate = CellDelegate(lambda: self.plan, self.settings)
         self.table.setItemDelegate(self.delegate)
         layout.addWidget(self.table)
+
+        # Notizzeile: zeigt die Notiz des zuletzt angeklickten Tages
+        self.note_label = QLabel()
+        self.note_label.setWordWrap(True)
+        self.note_label.setStyleSheet("color: #555555;")
+        layout.addWidget(self.note_label)
 
         # Zusammenfassung + Warnungen
         self.summary_label = QLabel()
@@ -226,8 +244,13 @@ class PlanTab(QWidget):
         if not self.plan or self.active_stamp is None:
             return
         ref = self._cell_ref(row, col)
-        if ref:
-            self.apply_stamp(self.active_stamp, [ref])
+        if not ref:
+            return
+        if self.active_stamp == STAMP_NOTE:
+            # Notiz gilt fuer den Tag, nicht fuer die einzelne Zelle
+            self.edit_note(ref[1])
+            return
+        self.apply_stamp(self.active_stamp, [ref])
 
     def _entry_at(self, assistant_id: str, day: int) -> ShiftEntry | None:
         return next(
@@ -247,6 +270,48 @@ class PlanTab(QWidget):
         self.plan.schedule.setdefault(day, []).append(
             ShiftEntry(assistant_id=assistant_id, shift_type=shift_type, locked=True)
         )
+
+    # --- Kandidaten (mehrere Personen fuer denselben Dienst/RB am Tag) ---
+
+    def _same_type_manual_entries(self, day: int, shift_type: ShiftType,
+                                  exclude_id: str | None = None) -> list[ShiftEntry]:
+        """Manuelle Eintraege (inkl. Kandidaten) dieses Typs anderer Personen."""
+        return [
+            e for e in self.plan.schedule.get(day, [])
+            if e.shift_type == shift_type and not e.generated
+            and e.assistant_id != exclude_id
+        ]
+
+    def _normalize_candidates(self, day: int, shift_type: ShiftType):
+        """Bleibt nur ein Kandidat uebrig, wird er wieder ein normaler
+        fixer Einzeleintrag (ein manueller Volleintrag = fix)."""
+        candidates = [
+            e for e in self.plan.schedule.get(day, [])
+            if e.candidate and e.shift_type == shift_type
+        ]
+        if len(candidates) == 1:
+            e = candidates[0]
+            e.candidate = False
+            e.chosen = False
+            e.locked = True
+
+    def _choose_candidate_entry(self, entry: ShiftEntry, day: int):
+        """Feste Wahl eines Kandidaten: uebrige Kandidaten desselben
+        Tags/Typs verlieren ihre Wahl."""
+        for e in self.plan.schedule.get(day, []):
+            if e.candidate and e.shift_type == entry.shift_type and e is not entry:
+                e.chosen = False
+                e.locked = False
+        entry.chosen = True
+        entry.locked = True
+
+    def choose_candidate(self, assistant_id: str, day: int):
+        entry = self._entry_at(assistant_id, day)
+        if not self.plan or entry is None or not entry.candidate:
+            return
+        self._choose_candidate_entry(entry, day)
+        self.refresh_display()
+        self.plan_modified.emit()
 
     def apply_stamp(self, stamp: str, cells: list[tuple[str, int]]):
         """Wendet einen Stempel auf Zellen (assistant_id, day) an.
@@ -270,14 +335,40 @@ class PlanTab(QWidget):
                 # Entfernt Stempel und Zufalls-Vorschlaege
                 if entry:
                     self._remove_entry(assistant_id, day)
+                    if entry.candidate:
+                        self._normalize_candidates(day, entry.shift_type)
                     changed = True
 
             elif stamp in STAMP_SHIFTS:
                 shift_type = STAMP_SHIFTS[stamp]
                 if entry and entry.shift_type == shift_type:
                     self._remove_entry(assistant_id, day)
+                    # Verbleibt genau ein Kandidat, wird er wieder fix
+                    self._normalize_candidates(day, shift_type)
                 elif entry is None or allow_overwrite:
-                    self._set_entry(assistant_id, day, shift_type)
+                    if entry is not None:
+                        self._remove_entry(assistant_id, day)
+                    others = (
+                        self._same_type_manual_entries(day, shift_type, assistant_id)
+                        if shift_type in CANDIDATE_TYPES else []
+                    )
+                    if others:
+                        # Zweite/weitere Person fuer denselben Dienst/RB:
+                        # alle manuellen Eintraege des Typs werden Kandidaten
+                        # - der Tag ist damit wieder "zu waehlen"
+                        for e in others:
+                            e.candidate = True
+                            e.chosen = False
+                            e.locked = False
+                        self.plan.schedule.setdefault(day, []).append(
+                            ShiftEntry(
+                                assistant_id=assistant_id,
+                                shift_type=shift_type,
+                                candidate=True,
+                            )
+                        )
+                    else:
+                        self._set_entry(assistant_id, day, shift_type)
                 else:
                     continue
                 changed = True
@@ -311,7 +402,11 @@ class PlanTab(QWidget):
 
             elif stamp == STAMP_LOCK:
                 if entry:
-                    entry.locked = not entry.locked
+                    if entry.candidate and not entry.locked:
+                        # Fixieren eines Kandidaten = feste Wahl
+                        self._choose_candidate_entry(entry, day)
+                    else:
+                        entry.locked = not entry.locked
                     changed = True
 
         if changed:
@@ -327,9 +422,16 @@ class PlanTab(QWidget):
         self.month_selector.set_month(plan.year, plan.month)
         self.rebuild_grid()
 
+    def _note_text(self, day: int) -> str:
+        if not self.plan:
+            return ""
+        return (self.plan.notes.get(day) or "").strip()
+
     def _day_header(self, day: int) -> str:
         weekday = WEEKDAYS[date(self.plan.year, self.plan.month, day).weekday()]
-        return f"{day}\n{weekday}"
+        # Tage mit Notiz tragen das Notizsymbol im Kopf
+        icon = f" {NOTE_ICON}" if self._note_text(day) else ""
+        return f"{day}{icon}\n{weekday}"
 
     def _make_day_item(self, assistant_id: str, day: int) -> QTableWidgetItem:
         item = QTableWidgetItem()
@@ -401,6 +503,9 @@ class PlanTab(QWidget):
                 item.setText(self._day_header(day).replace("\n", " "))
                 item.setFont(bold)
                 item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                note = self._note_text(day)
+                if note:
+                    item.setToolTip(note)
             self.table.setItem(row, col, item)
 
     def rebuild_grid(self):
@@ -487,7 +592,8 @@ class PlanTab(QWidget):
         full = vm = nm = rb = 0
         for entries in self.plan.schedule.values():
             for e in entries:
-                if e.assistant_id != assistant_id:
+                # Nicht gewaehlte Kandidaten sind nur Vorschlaege
+                if e.assistant_id != assistant_id or not is_effective(e):
                     continue
                 if e.shift_type == ShiftType.FULL:
                     full += 1
@@ -511,7 +617,99 @@ class PlanTab(QWidget):
                 item.setText(f"{full} | {vm} | {nm} | {rb}")
         # Der Delegate zeichnet die Tageszellen direkt aus den Plandaten
         self.table.viewport().update()
+        self._update_day_headers()
+        self._update_note_line()
         self.update_summary()
+
+    # --- Tagesnotizen ---
+
+    def _update_day_headers(self):
+        """Notizsymbol + Tooltip in den Tageskoepfen nachziehen."""
+        if not self.plan:
+            return
+        days_in_month = calendar.monthrange(self.plan.year, self.plan.month)[1]
+        if self.settings.split_view:
+            half = math.ceil(days_in_month / 2)
+            n = len(self.plan.assistants)
+            self._fill_day_header_row(0, first_day=1, days_in_month=days_in_month)
+            self._fill_day_header_row(
+                self._group1_row_offset + n, first_day=half + 1,
+                days_in_month=days_in_month,
+            )
+        else:
+            for col in range(DAY_COL_OFFSET, self.table.columnCount()):
+                day = col - DAY_COL_OFFSET + 1
+                item = self.table.horizontalHeaderItem(col)
+                if item is None or day > days_in_month:
+                    continue
+                item.setText(self._day_header(day))
+                item.setToolTip(self._note_text(day))
+
+    def _current_day(self) -> int | None:
+        """Tag der aktuell gewaehlten Zelle (fuer die Notizzeile)."""
+        item = self.table.currentItem()
+        if item is None:
+            return None
+        ref = item.data(Qt.ItemDataRole.UserRole)
+        return ref[1] if ref else None
+
+    def _update_note_line(self):
+        if not self.plan:
+            self.note_label.setText("")
+            return
+        day = self._current_day()
+        note = self._note_text(day) if day else ""
+        if note:
+            self.note_label.setText(
+                f"{NOTE_ICON} Notiz {day}.{self.plan.month:02d}.: {note}"
+            )
+        else:
+            self.note_label.setText("")
+
+    def edit_note(self, day: int):
+        """Dialog zum Anlegen/Bearbeiten der Tagesnotiz.
+
+        Leerer Text loescht die Notiz (das Symbol im Tageskopf verschwindet).
+        """
+        if not self.plan:
+            return
+        dialog = QDialog(self)
+        dialog.setWindowTitle(
+            f"Notiz fuer {day:02d}.{self.plan.month:02d}.{self.plan.year}"
+        )
+        layout = QVBoxLayout()
+        editor = QPlainTextEdit(self._note_text(day))
+        editor.setPlaceholderText("Notiz zu diesem Tag ...")
+        editor.setMinimumSize(360, 120)
+        layout.addWidget(editor)
+        hint = QLabel("Leer lassen und OK druecken loescht die Notiz.")
+        hint.setStyleSheet("color: #777777;")
+        layout.addWidget(hint)
+
+        buttons = QHBoxLayout()
+        buttons.addStretch()
+        ok_btn = QPushButton("OK")
+        ok_btn.setDefault(True)
+        ok_btn.clicked.connect(dialog.accept)
+        buttons.addWidget(ok_btn)
+        cancel_btn = QPushButton("Abbrechen")
+        cancel_btn.clicked.connect(dialog.reject)
+        buttons.addWidget(cancel_btn)
+        layout.addLayout(buttons)
+        dialog.setLayout(layout)
+        editor.setFocus()
+
+        if not dialog.exec():
+            return
+        text = editor.toPlainText().strip()
+        if text == self._note_text(day):
+            return
+        if text:
+            self.plan.notes[day] = text
+        else:
+            self.plan.notes.pop(day, None)
+        self.refresh_display()
+        self.plan_modified.emit()
 
     def update_summary(self):
         if not self.plan:
@@ -543,14 +741,50 @@ class PlanTab(QWidget):
         if not self.plan:
             return
 
-        seed = self.settings.seed if self.settings.deterministic else None
+        # Auch ohne "Deterministisch" einen konkreten Seed ziehen: der
+        # Konflikt-Dialog wiederholt den Lauf ggf. mit denselben Wuerfeln
+        if self.settings.deterministic:
+            seed = self.settings.seed
+        else:
+            seed = random.randrange(0, 1_000_000)
         try:
-            self.plan = generate(self.plan, seed)
+            result = generate(self.plan, seed)
+            self.plan = result.plan
             self.plan.seed = seed
             self.refresh_display()
             self.plan_modified.emit()
+            if result.conflicts:
+                self._handle_conflicts(result, seed)
         except Exception as e:
             QMessageBox.critical(self, "Fehler", f"Generierung fehlgeschlagen:\n{e}")
+
+    def _handle_conflicts(self, result, seed: int):
+        """Zeigt die Konflikte des Laufs; weicht die Nutzerwahl von den
+        angewendeten Vorschlaegen ab, wiederholt sich der Lauf mit einem
+        Resolver, der diese Entscheidungen beantwortet."""
+        dialog = ConflictDialog(result.conflicts, self)
+        if not dialog.exec():
+            return  # Vorschlaege behalten
+        decisions = dialog.decisions()
+        applied = {
+            (c.day, c.kind): c.options[c.applied].assistant_id
+            for c in result.conflicts
+        }
+        if decisions == applied:
+            return
+
+        def resolver(conflict):
+            key = (conflict.day, conflict.kind)
+            if key in decisions:
+                for option in conflict.options:
+                    if option.assistant_id == decisions[key]:
+                        return option
+            return conflict.options[conflict.proposal]
+
+        rerun = generate(self.plan, seed, resolver=resolver)
+        self.plan = rerun.plan
+        self.refresh_display()
+        self.plan_modified.emit()
 
     def reset_schedule(self):
         if not self.plan:
@@ -612,6 +846,27 @@ class PlanTab(QWidget):
         menu.addAction("Fixieren" + suffix, lambda: self.set_locked(cells, True))
         menu.addAction("Fixierung loesen" + suffix, lambda: self.set_locked(cells, False))
 
+        # Notiz gilt je Tag: Tag der Zelle unter dem Mauszeiger, sonst der
+        # ersten markierten Zelle
+        item = self.table.itemAt(pos)
+        ref = item.data(Qt.ItemDataRole.UserRole) if item else None
+        note_day = ref[1] if ref else cells[0][1]
+
+        # Feste Wahl eines Kandidaten (Zelle unter dem Mauszeiger)
+        if ref:
+            entry = self._entry_at(ref[0], ref[1])
+            if entry is not None and entry.candidate:
+                menu.addSeparator()
+                menu.addAction(
+                    "Kandidat fest waehlen",
+                    lambda: self.choose_candidate(ref[0], ref[1]),
+                )
+        menu.addSeparator()
+        menu.addAction(
+            f"Notiz fuer Tag {note_day} bearbeiten...",
+            lambda: self.edit_note(note_day),
+        )
+
         menu.exec(self.table.mapToGlobal(pos))
 
     def set_locked(self, cells: list[tuple[str, int]], locked: bool):
@@ -620,7 +875,13 @@ class PlanTab(QWidget):
         changed = False
         for assistant_id, day in cells:
             entry = self._entry_at(assistant_id, day)
-            if entry and entry.locked != locked:
+            if entry is None:
+                continue
+            if locked and entry.candidate and not entry.locked:
+                # Fixieren eines Kandidaten = feste Wahl
+                self._choose_candidate_entry(entry, day)
+                changed = True
+            elif entry.locked != locked:
                 entry.locked = locked
                 changed = True
         if changed:
