@@ -4,6 +4,7 @@ from .assistant import (
     absence_days, set_absence_days, blocked_days, set_blocked_days,
 )
 from .plan import MonthPlan
+from .holidays import bavarian_holidays, holiday_name
 from .profile import (
     AssistantSettings, SettingsProfile, settings_from_constraints, apply_settings,
 )
@@ -21,6 +22,8 @@ __all__ = [
     "blocked_days",
     "set_blocked_days",
     "MonthPlan",
+    "bavarian_holidays",
+    "holiday_name",
     "AssistantSettings",
     "SettingsProfile",
     "settings_from_constraints",

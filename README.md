@@ -98,6 +98,25 @@ baut die Windows-Version in der Cloud:
 - **Release**: beim Pushen eines Tags `v*` (z. B. `git tag v1.0 && git push --tags`)
   wird gebaut und die ZIP-Datei automatisch an das GitHub-Release angehängt.
 
+### Release-Checkliste
+
+1. Version in **`version.py`** (`__version__`) **und** `pyproject.toml` erhöhen —
+   beide müssen übereinstimmen; der Workflow bricht sonst beim Tag-Build ab.
+2. Committen, dann Tag `v<Version>` pushen (z. B. `git tag v0.3.0 && git push --tags`).
+3. Der Workflow baut und hängt `JohannaAssistenten-windows.zip` an das Release.
+   **Den Asset-Namen und den Ordnernamen `JohannaAssistenten` im ZIP nie ändern** —
+   der automatische Updater sucht genau danach.
+
+## Updates
+
+Die installierte Windows-Version prüft beim Start automatisch (und jederzeit über
+*Einstellungen → Nach Updates suchen…*), ob auf GitHub ein neueres Release liegt.
+Gibt es eines, fragt ein Dialog nach; auf Wunsch lädt das Programm das Update
+herunter, tauscht sich nach dem Beenden selbst aus und startet neu — der
+`data\`-Ordner mit allen Plänen bleibt dabei unangetastet. Einzelne Versionen
+lassen sich überspringen. Schlägt die Prüfung fehl (kein Internet), startet das
+Programm einfach normal.
+
 ## Verwendung
 
 1. **Team erstellen:** Im "Team"-Tab Assistenten hinzufügen, Namen und Farben setzen
