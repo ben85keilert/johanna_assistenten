@@ -184,7 +184,10 @@ Drei Tabs:
      Kalender-Datumsfeldern und Art-Auswahl; überlappende oder angrenzende
      Zeiträume verschmelzen automatisch. Ein Klick auf einen Listeneintrag
      springt im Kalender auf dessen Monat.
-3. **Team-Tab**: die Helferliste (anlegen/entfernen, Name und Farbe) in
+3. **Team-Tab**: die Helferliste (anlegen/entfernen, Name und Farbe;
+   **„▲ Hoch"/„▼ Runter" verschieben den gewählten Helfer in der
+   Reihenfolge** — sie bestimmt die Zeilenreihenfolge im Dienstplan und in
+   den Exporten und wird mitgespeichert) in
    **zwei Vorlagen-Tabs** („Vorlage 1"/„Vorlage 2"): jede Vorlage hält einen
    kompletten Satz Einstellungen je Helfer — **Min./Max. Dienste, Max. Folge,
    Min. Block, Abstand (Mindestabstand), Freiwünsche (Freiwunsch-Kontingent,
