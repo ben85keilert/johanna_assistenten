@@ -477,7 +477,8 @@ class JohannaApp:
         if folder:
             try:
                 from export.pdf_exporter import export_pdf
-                f = export_pdf(self.plan, folder)
+                # Das PDF uebernimmt die Eintragsfarben aus den Einstellungen
+                f = export_pdf(self.plan, folder, self.settings)
                 QMessageBox.information(self.window, "Erfolg", f"PDF exportiert:\n{f}")
             except Exception as e:
                 QMessageBox.critical(self.window, "Fehler", f"Export fehlgeschlagen:\n{e}")
