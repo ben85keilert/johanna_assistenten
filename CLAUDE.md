@@ -86,7 +86,7 @@ Three JSON files under `data/` (next to the executable when frozen — see `_bas
 **Saving** (`main.py`): autosave every `AUTOSAVE_INTERVAL_MS` (15 s, only when `is_modified`), plus on month change, on Ctrl+S, on close, and on SIGTERM/SIGINT (a 300 ms idle `QTimer` lets Python signal handlers run inside the Qt loop). Closing with unsaved changes asks Speichern/Verwerfen/Abbrechen via `MainWindow.on_close_request` (returning False keeps the window open). Save errors surface as a dialog once per session and in the status bar; `is_modified` stays set.
 
 ### Export Layer (`export/`)
-CSVExporter (flat tables), ExcelExporter (openpyxl, assistant colors), PDFExporter (reportlab, landscape). New exporters: implement `export(plan, folder)`, wire into the menu in `main.py`.
+CSVExporter (flat tables), ExcelExporter (openpyxl, assistant colors), PDFExporter (reportlab, landscape; takes the shared `AppSettings` as third argument and mirrors the grid's color logic — `entry_colors`, opaque fixed vs. pale in-planning entries, U/X, weekend/holiday gray — with fixed page breaks: half 1, half 2, then summary + legend + notes + holidays). New exporters: implement `export(plan, folder)` (pass `settings` too if colors are needed), wire into the menu in `main.py`.
 
 ## Key Design Decisions
 

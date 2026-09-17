@@ -390,6 +390,16 @@ die übrigen Felder kommen dann weiterhin aus `team.json`.
 In den CSV-/Excel-/PDF-Exporten hat die Zusammenfassung eine eigene **RB**-Spalte;
 „Dienste gesamt" ist die gewichtete Dienstzahl (VOLL = 1, VM/NM = 0,5, ohne RB).
 
+Der **PDF-Export** verwendet dieselbe Farblogik wie das Planraster: die
+Eintragsfarben aus **Einstellungen → Farben…** (fixierte Einträge kräftig,
+noch in Planung befindliche blass), „U"/„X" für Urlaub/Block, Grau für
+Wochenenden und Feiertage; nicht gewählte Kandidaten erscheinen nicht.
+Die Inhalte sind fest auf Seiten verteilt, damit keine Tabelle mitten
+umbricht: Seite 1 = erste Monatshälfte, Seite 2 = zweite Hälfte, Seite 3 =
+Zusammenfassung, Farb-Legende, die Tagesnotizen (Tage mit Notiz tragen im
+Tageskopf ein `*`) und die Feiertage des Monats. Hat eine Person an einem
+Tag Dienst **und** Rufbereitschaft, zeigt die Zelle beides (z. B. „VOLL/RB").
+
 ### `data/settings.json` — App-Zustand
 
 ```json
