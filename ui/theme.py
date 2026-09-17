@@ -14,6 +14,10 @@ FONT_PT = 10
 # ueberall dieselbe Farbe: Planraster, Urlaubs-Kalender, PDF-Export
 WEEKEND_COLOR = QColor(235, 235, 235)
 
+# Notizsymbol: im Tageskopf und in den Zellen aller an dem Tag aktiven
+# Helfer (Dienst und Rufbereitschaft)
+NOTE_ICON = "\U0001F4DD"
+
 # Zeilenhoehe der Tabellen (Pixel)
 ROW_HEIGHT = 32
 
