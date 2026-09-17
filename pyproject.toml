@@ -1,7 +1,7 @@
 [project]
 name = "johanna-assistenten"
 # Muss mit version.py uebereinstimmen (Release-Checkliste im README)
-version = "0.3.0"
+version = "0.3.1"
 description = "PySide6-Dienstplan-App: faire Verteilung der Assistenzdienste eines Monats"
 readme = "README.md"
 requires-python = ">=3.10"

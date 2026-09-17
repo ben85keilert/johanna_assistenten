@@ -6,7 +6,7 @@ bei Tag-Builds. Die Update-Pruefung (updater.py) vergleicht diese Version
 mit dem neuesten GitHub-Release.
 """
 
-__version__ = "0.3.0"
+__version__ = "0.3.1"
 
 # GitHub-Repository, dessen Releases auf Updates geprueft werden
 GITHUB_REPO = "ben85keilert/johanna_assistenten"
