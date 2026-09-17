@@ -10,7 +10,7 @@ import copy
 
 CURRENT_TEAM_VERSION = 6
 CURRENT_PLAN_VERSION = 7
-CURRENT_SETTINGS_VERSION = 4
+CURRENT_SETTINGS_VERSION = 5
 
 # Einheitliche Farben je Eintragsart (statt einer Farbe je Helfer).
 # Aenderbar unter Einstellungen > Farben; hier die Standardwerte.
@@ -204,6 +204,11 @@ def migrate_settings(data: dict) -> dict:
         # v3 -> v4: einstellbare Farben je Eintragsart (Farbmanagement)
         data.setdefault("entry_colors", dict(DEFAULT_ENTRY_COLORS))
         version = 4
+
+    if version < 5:
+        # v4 -> v5: automatische Update-Pruefung - uebersprungene Version merken
+        data.setdefault("skipped_version", "")
+        version = 5
 
     data["version"] = CURRENT_SETTINGS_VERSION
     return data

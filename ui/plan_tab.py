@@ -10,6 +10,7 @@ from PySide6.QtGui import QColor, QFont
 from models import (
     MonthPlan, ShiftEntry, ShiftType, is_effective,
     absence_days, set_absence_days, blocked_days, set_blocked_days,
+    holiday_name,
 )
 from persistence import AppSettings
 from datetime import date
@@ -35,8 +36,9 @@ STAMP_NOTE = "note"
 STAMP_LOCK = "lock"
 STAMP_DELETE = "delete"
 
-# Notizsymbol im Tageskopf, wenn eine Notiz vorhanden ist
-NOTE_ICON = "\U0001F4DD"
+# Notizsymbol im Tageskopf, wenn eine Notiz vorhanden ist (zentral im Theme,
+# der CellDelegate nutzt dasselbe Symbol in den Zellen)
+NOTE_ICON = theme.NOTE_ICON
 
 STAMP_SHIFTS = {
     STAMP_FULL: ShiftType.FULL,
@@ -436,6 +438,11 @@ class PlanTab(QWidget):
         icon = f" {NOTE_ICON}" if self._note_text(day) else ""
         return f"{day}{icon}\n{weekday}"
 
+    def _day_header_tooltip(self, day: int) -> str:
+        """Tooltip des Tageskopfs: Feiertagsname und/oder Notiz."""
+        holiday = holiday_name(self.plan.year, self.plan.month, day)
+        return "\n\n".join(filter(None, [holiday, self._note_text(day)]))
+
     def _make_day_item(self, assistant_id: str, day: int) -> QTableWidgetItem:
         item = QTableWidgetItem()
         item.setData(Qt.ItemDataRole.UserRole, (assistant_id, day))
@@ -506,9 +513,9 @@ class PlanTab(QWidget):
                 item.setText(self._day_header(day).replace("\n", " "))
                 item.setFont(bold)
                 item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-                note = self._note_text(day)
-                if note:
-                    item.setToolTip(note)
+                tooltip = self._day_header_tooltip(day)
+                if tooltip:
+                    item.setToolTip(tooltip)
             self.table.setItem(row, col, item)
 
     def rebuild_grid(self):
@@ -646,7 +653,7 @@ class PlanTab(QWidget):
                 if item is None or day > days_in_month:
                     continue
                 item.setText(self._day_header(day))
-                item.setToolTip(self._note_text(day))
+                item.setToolTip(self._day_header_tooltip(day))
 
     def _current_day(self) -> int | None:
         """Tag der aktuell gewaehlten Zelle (fuer die Notizzeile)."""

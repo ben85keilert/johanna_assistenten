@@ -55,6 +55,17 @@ class TeamTab(QWidget):
         self.remove_btn.clicked.connect(self.remove_assistant)
         button_layout.addWidget(self.remove_btn)
 
+        # Reihenfolge steuert die Zeilen im Dienstplan (und in team.json)
+        self.up_btn = QPushButton("▲ Hoch")
+        self.up_btn.setToolTip("Gewaehlten Helfer in der Liste nach oben verschieben")
+        self.up_btn.clicked.connect(lambda: self.move_assistant(-1))
+        button_layout.addWidget(self.up_btn)
+
+        self.down_btn = QPushButton("▼ Runter")
+        self.down_btn.setToolTip("Gewaehlten Helfer in der Liste nach unten verschieben")
+        self.down_btn.clicked.connect(lambda: self.move_assistant(1))
+        button_layout.addWidget(self.down_btn)
+
         button_layout.addStretch()
         left_layout.addLayout(button_layout)
 
@@ -361,6 +372,29 @@ class TeamTab(QWidget):
         for profile in self.profiles:
             profile.settings.pop(removed.id, None)
         self.refresh_table()
+        self.assistants_changed.emit()
+
+    def move_assistant(self, delta: int):
+        """Verschiebt den gewaehlten Helfer in der Reihenfolge nach
+        oben/unten. Die Listenreihenfolge bestimmt die Zeilen im Dienstplan
+        und wird in team.json mitgespeichert."""
+        if not self.plan:
+            return
+
+        table = self._tables[self.profile_tabs.currentIndex()]
+        row = table.currentRow()
+        if row < 0:
+            QMessageBox.warning(self, "Warnung", "Bitte waehlen Sie einen Helfer aus.")
+            return
+
+        new_row = row + delta
+        if new_row < 0 or new_row >= len(self.plan.assistants):
+            return
+
+        assistants = self.plan.assistants
+        assistants[row], assistants[new_row] = assistants[new_row], assistants[row]
+        self.refresh_table()
+        table.setCurrentCell(new_row, 1)
         self.assistants_changed.emit()
 
     def update_assistant_color(self, assistant_id: str, color: str):

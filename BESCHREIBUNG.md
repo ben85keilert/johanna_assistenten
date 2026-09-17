@@ -153,7 +153,11 @@ Drei Tabs:
    - **Tagesnotizen**: Zu jedem Tag lässt sich eine Freitext-Notiz hinterlegen
      (Stempel **„Notiz"** + Klick auf eine Zelle des Tages, oder Rechtsklick →
      „Notiz für Tag … bearbeiten…"). Tage mit Notiz tragen im Tageskopf ein
-     **Notizsymbol (📝)**; der Text erscheint als Tooltip auf dem Tageskopf
+     **Notizsymbol (📝)**; **zusätzlich erscheint das Symbol in den Zellen
+     aller an dem Tag aktiven Helfer** (Dienst und Rufbereitschaft — eine
+     Notiz wie „Dienst startet um 14:00 Uhr" betrifft alle Eingeteilten),
+     dort ebenfalls mit dem Notiztext als Tooltip. Nicht gewählte
+     Kandidaten zählen nicht als aktiv. Der Text erscheint als Tooltip auf dem Tageskopf
      und in einer **Notizzeile unter dem Raster**, sobald eine Zelle des Tages
      angeklickt ist. Der Dialog bearbeitet die Notiz mehrzeilig; leerer Text
      löscht sie.
@@ -184,7 +188,10 @@ Drei Tabs:
      Kalender-Datumsfeldern und Art-Auswahl; überlappende oder angrenzende
      Zeiträume verschmelzen automatisch. Ein Klick auf einen Listeneintrag
      springt im Kalender auf dessen Monat.
-3. **Team-Tab**: die Helferliste (anlegen/entfernen, Name und Farbe) in
+3. **Team-Tab**: die Helferliste (anlegen/entfernen, Name und Farbe;
+   **„▲ Hoch"/„▼ Runter" verschieben den gewählten Helfer in der
+   Reihenfolge** — sie bestimmt die Zeilenreihenfolge im Dienstplan und in
+   den Exporten und wird mitgespeichert) in
    **zwei Vorlagen-Tabs** („Vorlage 1"/„Vorlage 2"): jede Vorlage hält einen
    kompletten Satz Einstellungen je Helfer — **Min./Max. Dienste, Max. Folge,
    Min. Block, Abstand (Mindestabstand), Freiwünsche (Freiwunsch-Kontingent,
@@ -215,7 +222,12 @@ Drei Tabs:
    (gewürfelt, nicht fixiert) erscheinen transparenter** und tragen
    zusätzlich einen Punkt, fixierte ein Schloss. Die Helferfarbe aus dem
    Team-Tab dient weiter der Wiedererkennung in Listen, Auswahlfeldern und
-   Exporten.
+   Exporten. **Wochenenden und die gesetzlichen Feiertage in Bayern** (fest
+   hinterlegt, rechnerisch für jedes Jahr bestimmt, inkl. Mariä Himmelfahrt)
+   sind im Planraster, im Urlaubs-Kalender und im PDF-Export **grau
+   hinterlegt** — der Feiertagsname erscheint als Tooltip im Tageskopf.
+   Das ist reine Anzeige: die Planungslogik behandelt Feiertage nicht anders
+   als normale Tage.
    „Deterministisch" bedeutet: Mit gleichem Seed und gleichen Fixpunkten liefert
    „Generieren" immer denselben Plan (reproduzierbar); ohne Häkchen würfelt jeder
    Klick anders.
@@ -378,6 +390,16 @@ die übrigen Felder kommen dann weiterhin aus `team.json`.
 In den CSV-/Excel-/PDF-Exporten hat die Zusammenfassung eine eigene **RB**-Spalte;
 „Dienste gesamt" ist die gewichtete Dienstzahl (VOLL = 1, VM/NM = 0,5, ohne RB).
 
+Der **PDF-Export** verwendet dieselbe Farblogik wie das Planraster: die
+Eintragsfarben aus **Einstellungen → Farben…** (fixierte Einträge kräftig,
+noch in Planung befindliche blass), „U"/„X" für Urlaub/Block, Grau für
+Wochenenden und Feiertage; nicht gewählte Kandidaten erscheinen nicht.
+Die Inhalte sind fest auf Seiten verteilt, damit keine Tabelle mitten
+umbricht: Seite 1 = erste Monatshälfte, Seite 2 = zweite Hälfte, Seite 3 =
+Zusammenfassung, Farb-Legende, die Tagesnotizen (Tage mit Notiz tragen im
+Tageskopf ein `*`) und die Feiertage des Monats. Hat eine Person an einem
+Tag Dienst **und** Rufbereitschaft, zeigt die Zelle beides (z. B. „VOLL/RB").
+
 ### `data/settings.json` — App-Zustand
 
 ```json
@@ -411,6 +433,28 @@ Datendateien müssen nach jedem Update weiter funktionieren.** Dafür gilt:
 - **Regel für Entwickler**: Wer ein Dateiformat ändert, erhöht die Versionsnummer
   und ergänzt einen Migrationsschritt. Loader tolerieren fehlende Felder über
   Defaults.
+
+### Automatisches Programm-Update
+
+Die installierte Windows-Version hält sich selbst aktuell:
+
+- Beim Start prüft das Programm im Hintergrund, ob auf GitHub ein neueres
+  Release liegt (zusätzlich jederzeit über **Einstellungen → Nach Updates
+  suchen…**). Fehler bei der Prüfung (kein Internet, noch kein Release)
+  stören den Start nie — es passiert dann einfach nichts.
+- Gibt es ein Update, fragt ein Dialog: **„Jetzt installieren"**, **„Später"**
+  oder **„Diese Version überspringen"** (übersprungene Versionen meldet der
+  Start-Check nicht mehr, der manuelle Check schon).
+- Bei „Jetzt installieren" wird zuerst regulär gespeichert, dann das
+  Release-ZIP mit Fortschrittsanzeige heruntergeladen und geprüft. Nach dem
+  Beenden tauscht ein Hilfsskript den Programmordner aus und startet die
+  neue Version — **der `data`-Ordner bleibt dabei unangetastet**, die
+  Datendateien werden wie beschrieben beim nächsten Laden migriert.
+- Schlägt das Update fehl, läuft das Programm unverändert weiter; das ZIP
+  lässt sich immer auch manuell von GitHub herunterladen.
+- Die laufende Version steht im Fenstertitel (`version.py` ist die einzige
+  Quelle der Versionsnummer; Release-Tag und `pyproject.toml` müssen dazu
+  passen, der Build-Workflow prüft das).
 
 ## Vertraulichkeit
 

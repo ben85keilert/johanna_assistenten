@@ -19,6 +19,7 @@ from PySide6.QtGui import QColor, QPixmap, QFont
 from models import (
     Assistant, MonthPlan,
     absence_days, set_absence_days, blocked_days, set_blocked_days,
+    holiday_name,
 )
 from persistence import AppSettings
 from datetime import date, timedelta
@@ -36,7 +37,6 @@ STAMP_CLEAR = "clear"
 
 MIXED_COLOR = QColor(224, 224, 224)      # Urlaub+Block (nur in der Alle-Ansicht)
 OUTSIDE_COLOR = QColor(245, 245, 245)    # Tag gehoert nicht zum Monat
-WEEKEND_COLOR = QColor(235, 235, 235)
 
 
 class AbsenceTab(QWidget):
@@ -430,18 +430,23 @@ class AbsenceTab(QWidget):
                     item.setBackground(OUTSIDE_COLOR)
                 else:
                     color, lines = self._day_state(day)
+                    holiday = holiday_name(self.year, self.month, day)
                     item.setData(Qt.ItemDataRole.UserRole, day)
                     item.setText("\n".join([str(day)] + lines))
                     item.setFont(small)
                     if color is not None:
                         item.setBackground(color)
-                    elif weekday >= 5:
-                        item.setBackground(WEEKEND_COLOR)
+                    elif weekday >= 5 or holiday is not None:
+                        # Feiertage grau wie Wochenenden (reine Anzeige)
+                        item.setBackground(theme.WEEKEND_COLOR)
+                    tooltip = [holiday] if holiday else []
                     if date(self.year, self.month, day) == today:
                         bold = QFont(small)
                         bold.setBold(True)
                         item.setFont(bold)
-                        item.setToolTip("Heute")
+                        tooltip.append("Heute")
+                    if tooltip:
+                        item.setToolTip("\n".join(tooltip))
                 self.calendar.setItem(week, weekday, item)
 
             # Zeilenkopf: Kalenderwoche
