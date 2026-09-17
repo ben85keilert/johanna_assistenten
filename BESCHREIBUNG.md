@@ -153,7 +153,11 @@ Drei Tabs:
    - **Tagesnotizen**: Zu jedem Tag lässt sich eine Freitext-Notiz hinterlegen
      (Stempel **„Notiz"** + Klick auf eine Zelle des Tages, oder Rechtsklick →
      „Notiz für Tag … bearbeiten…"). Tage mit Notiz tragen im Tageskopf ein
-     **Notizsymbol (📝)**; der Text erscheint als Tooltip auf dem Tageskopf
+     **Notizsymbol (📝)**; **zusätzlich erscheint das Symbol in den Zellen
+     aller an dem Tag aktiven Helfer** (Dienst und Rufbereitschaft — eine
+     Notiz wie „Dienst startet um 14:00 Uhr" betrifft alle Eingeteilten),
+     dort ebenfalls mit dem Notiztext als Tooltip. Nicht gewählte
+     Kandidaten zählen nicht als aktiv. Der Text erscheint als Tooltip auf dem Tageskopf
      und in einer **Notizzeile unter dem Raster**, sobald eine Zelle des Tages
      angeklickt ist. Der Dialog bearbeitet die Notiz mehrzeilig; leerer Text
      löscht sie.

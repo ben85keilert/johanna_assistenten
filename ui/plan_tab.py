@@ -36,8 +36,9 @@ STAMP_NOTE = "note"
 STAMP_LOCK = "lock"
 STAMP_DELETE = "delete"
 
-# Notizsymbol im Tageskopf, wenn eine Notiz vorhanden ist
-NOTE_ICON = "\U0001F4DD"
+# Notizsymbol im Tageskopf, wenn eine Notiz vorhanden ist (zentral im Theme,
+# der CellDelegate nutzt dasselbe Symbol in den Zellen)
+NOTE_ICON = theme.NOTE_ICON
 
 STAMP_SHIFTS = {
     STAMP_FULL: ShiftType.FULL,

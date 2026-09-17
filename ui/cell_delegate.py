@@ -1,6 +1,8 @@
 from datetime import date
 
-from PySide6.QtWidgets import QStyledItemDelegate, QStyleOptionViewItem, QStyle
+from PySide6.QtWidgets import (
+    QStyledItemDelegate, QStyleOptionViewItem, QStyle, QToolTip,
+)
 from PySide6.QtCore import Qt, QRect, QSize
 from PySide6.QtGui import QPainter, QColor, QFont, QPen
 
@@ -149,6 +151,16 @@ class CellDelegate(QStyledItemDelegate):
             painter.setPen(Qt.PenStyle.NoPen)
             painter.drawPolygon(triangle)
 
+        # Notizsymbol unten links: der Tag hat eine Notiz und diese Person
+        # ist an dem Tag aktiv (Dienst oder Rufbereitschaft) - z. B.
+        # "Dienst startet um 14:00 Uhr" betrifft alle Eingeteilten
+        if (entry is not None and is_effective(entry)
+                and (plan.notes.get(day) or "").strip()):
+            note_rect = QRect(option.rect.left() + 2, option.rect.bottom() - 15, 14, 14)
+            painter.setPen(QColor(0, 0, 0))
+            painter.setFont(QFont("", 8))
+            painter.drawText(note_rect, Qt.AlignmentFlag.AlignCenter, theme.NOTE_ICON)
+
         # Schloss oben rechts: fixiert
         if entry is not None and entry.locked:
             lock_rect = QRect(option.rect.right() - 16, option.rect.top() + 2, 14, 14)
@@ -166,6 +178,22 @@ class CellDelegate(QStyledItemDelegate):
             painter.drawRect(option.rect.adjusted(1, 1, -1, -1))
 
         painter.restore()
+
+    def helpEvent(self, event, view, option, index) -> bool:
+        """Tooltip mit dem Notiztext auf Zellen mit Notizsymbol."""
+        plan = self.plan_provider()
+        user_data = index.data(Qt.ItemDataRole.UserRole)
+        if plan is not None and user_data:
+            assistant_id, day = user_data
+            note = (plan.notes.get(day) or "").strip()
+            entry = next(
+                (e for e in plan.schedule.get(day, [])
+                 if e.assistant_id == assistant_id), None,
+            )
+            if note and entry is not None and is_effective(entry):
+                QToolTip.showText(event.globalPos(), f"{theme.NOTE_ICON} {note}", view)
+                return True
+        return super().helpEvent(event, view, option, index)
 
     def sizeHint(self, option: QStyleOptionViewItem, index) -> QSize:
         return QSize(theme.DAY_COL_MIN_W, theme.ROW_HEIGHT)
