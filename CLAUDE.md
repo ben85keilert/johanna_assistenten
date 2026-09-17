@@ -30,7 +30,9 @@ scheduling/      # Random generator engine + validator
 ui/              # PySide6/Qt UI components and dialogs
 persistence/     # JSON save/load, app settings, format migrations
 export/          # CSV, Excel, PDF exporters
-main.py          # Entry point: JohannaApp wires everything, owns save/load flow
+main.py          # Entry point: JohannaApp wires everything, owns save/load flow + update dialogs
+version.py       # __version__ + GITHUB_REPO - single source of truth (window title, updater; keep pyproject.toml in sync, workflow enforces it on v* tags)
+updater.py       # Auto-update via GitHub releases: check/download threads, robocopy swap script (spares data\); asset name JohannaAssistenten-windows.zip is part of the contract
 BESCHREIBUNG.md  # Authoritative German description of purpose & behavior
 PLANUNGSLOGIK.md # Schematic of the generator's assignment order & priorities
 ```
@@ -75,7 +77,7 @@ Month switching goes through `JohannaApp.change_month`: saves the current month,
 Three JSON files under `data/` (next to the executable when frozen — see `_base_dir()`):
 - `team.json` — team roster + cross-month constraints (absences, scheduling defaults) + the two settings profiles ("Vorlagen")
 - `plans/plan_YYYY_MM.json` — per-month schedule + day notes (`notes`) + per-assistant settings snapshot (`settings`: min/max shifts, max-consecutive, min-block, min-gap, oncall_attach, free_wish_quota)
-- `settings.json` — app state: last opened month, window geometry, allow-overwrite flag, seed, `entry_colors` (per-entry-type colors)
+- `settings.json` — app state: last opened month, window geometry, allow-overwrite flag, seed, `entry_colors` (per-entry-type colors), `skipped_version` (release tag skipped in the startup update prompt)
 
 "Datei > Speichern unter..." additionally writes a free-standing full-plan copy (schedule + team, `json_store.save`) anywhere; loadable via "Plan-Datei oeffnen...".
 
