@@ -6,12 +6,11 @@ from PySide6.QtGui import QPainter, QColor, QFont, QPen
 
 from PySide6.QtCore import QPoint
 
-from models import ShiftType, is_effective
+from models import ShiftType, is_effective, holiday_name
 from scheduling.engine import is_on_vacation, is_blocked
 from persistence import AppSettings
 from . import theme
 
-WEEKEND_COLOR = QColor(235, 235, 235)
 SHIFT_LABELS = {
     ShiftType.FULL: "VOLL",
     ShiftType.HALF_MORNING: "VM",
@@ -69,7 +68,12 @@ class CellDelegate(QStyledItemDelegate):
             and assistant is not None
             and is_blocked(assistant, day, plan.year, plan.month)
         )
-        weekend = date(plan.year, plan.month, day).weekday() >= 5
+        # Wochenenden und bayerische Feiertage bekommen dieselbe graue
+        # Grundflaeche (reine Anzeige, keine Planungslogik)
+        gray_day = (
+            date(plan.year, plan.month, day).weekday() >= 5
+            or holiday_name(plan.year, plan.month, day) is not None
+        )
 
         painter.save()
 
@@ -85,7 +89,7 @@ class CellDelegate(QStyledItemDelegate):
         # Grundflaeche (weiss bzw. Wochenend-Grau), darueber die Typfarbe:
         # voll deckend bei festen Eintraegen, transparent bei gewuerfelten,
         # sehr blass bei nicht gewaehlten Kandidaten
-        painter.fillRect(option.rect, WEEKEND_COLOR if weekend else QColor(255, 255, 255))
+        painter.fillRect(option.rect, theme.WEEKEND_COLOR if gray_day else QColor(255, 255, 255))
         if entry is not None:
             overlay = self._entry_color(SHIFT_COLOR_KEYS.get(entry.shift_type, ""))
             if is_open_candidate:

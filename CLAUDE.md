@@ -38,6 +38,7 @@ PLANUNGSLOGIK.md # Schematic of the generator's assignment order & priorities
 ## Architecture & Data Flow
 
 ### Core Models (`models/`)
+- **holidays.py**: Bavarian public holidays, computed per year (Gauss Easter formula, stdlib only, `lru_cache`d). `holiday_name(year, month, day)` drives the gray weekend-style shading in PlanTab cells, AbsenceTab calendar and the PDF export — display only, the scheduling engine ignores holidays. The shared gray lives in `ui/theme.py: WEEKEND_COLOR`.
 - **MonthPlan**: Root container for a month (year, month, schedule dict day→entries, assistants list, `notes` dict day→free-text note)
 - **Assistant**: id, name, color, active, constraints
 - **ShiftEntry**: assistant_id, shift_type, `locked` (fixed — survives re-roll), `generated` (True = placed by the random generator, shown lighter with a dot; False = set by hand, always survives), `candidate`/`chosen` (candidate mechanics for FULL/ON_CALL: several manual proposals per day, only a chosen one counts — `is_effective(entry)` in `models/shift.py` gates every coverage/target count, incl. exports)

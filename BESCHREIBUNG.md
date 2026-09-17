@@ -218,7 +218,12 @@ Drei Tabs:
    (gewürfelt, nicht fixiert) erscheinen transparenter** und tragen
    zusätzlich einen Punkt, fixierte ein Schloss. Die Helferfarbe aus dem
    Team-Tab dient weiter der Wiedererkennung in Listen, Auswahlfeldern und
-   Exporten.
+   Exporten. **Wochenenden und die gesetzlichen Feiertage in Bayern** (fest
+   hinterlegt, rechnerisch für jedes Jahr bestimmt, inkl. Mariä Himmelfahrt)
+   sind im Planraster, im Urlaubs-Kalender und im PDF-Export **grau
+   hinterlegt** — der Feiertagsname erscheint als Tooltip im Tageskopf.
+   Das ist reine Anzeige: die Planungslogik behandelt Feiertage nicht anders
+   als normale Tage.
    „Deterministisch" bedeutet: Mit gleichem Seed und gleichen Fixpunkten liefert
    „Generieren" immer denselben Plan (reproduzierbar); ohne Häkchen würfelt jeder
    Klick anders.
