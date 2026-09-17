@@ -2,9 +2,13 @@ import signal
 import sys
 from datetime import datetime
 
-from PySide6.QtWidgets import QApplication, QMessageBox, QFileDialog
-from PySide6.QtCore import QByteArray, QTimer
+from PySide6.QtWidgets import (
+    QApplication, QMessageBox, QFileDialog, QProgressDialog,
+)
+from PySide6.QtCore import QByteArray, QTimer, Qt
 from PySide6.QtGui import QAction
+
+from version import __version__, GITHUB_REPO
 
 from models import MonthPlan
 from persistence import (
@@ -161,6 +165,10 @@ class JohannaApp:
         colors_action = QAction("Farben...", self.window)
         colors_action.triggered.connect(self.open_color_settings)
         settings_menu.addAction(colors_action)
+
+        update_action = QAction("Nach Updates suchen...", self.window)
+        update_action.triggered.connect(self.check_updates_manual)
+        settings_menu.addAction(update_action)
 
     def load_plan_to_ui(self):
         self.team_tab.set_plan(self.plan)
@@ -483,8 +491,166 @@ class JohannaApp:
             except Exception as e:
                 QMessageBox.critical(self.window, "Fehler", f"Export fehlgeschlagen:\n{e}")
 
+    # --- Automatisches Update (GitHub-Releases) -------------------------
+
+    def _check_updates_startup(self):
+        """Stiller Start-Check: meldet sich nur, wenn es ein Update gibt.
+
+        Nur die installierte (gefrorene) Windows-Version kann sich selbst
+        aktualisieren - im Entwicklungsmodus passiert beim Start nichts."""
+        if not (getattr(sys, "frozen", False) and sys.platform == "win32"):
+            return
+        self._start_update_check(manual=False)
+
+    def check_updates_manual(self):
+        """Einstellungen > Nach Updates suchen: meldet jedes Ergebnis."""
+        self._start_update_check(manual=True)
+
+    def _start_update_check(self, manual: bool):
+        from updater import UpdateChecker
+        checker = getattr(self, "_update_checker", None)
+        if checker is not None and checker.isRunning():
+            return
+        self._update_checker = UpdateChecker(self.window)
+        self._update_checker.result.connect(
+            lambda release, m=manual: self._on_update_check_done(release, m)
+        )
+        self._update_checker.start()
+
+    def _on_update_check_done(self, release, manual: bool):
+        from updater import is_newer
+        if release is None:
+            # Kein Release, Rate-Limit oder kein Internet - beim Start still
+            if manual:
+                QMessageBox.warning(
+                    self.window, "Updates",
+                    "Die Update-Pruefung ist fehlgeschlagen.\n"
+                    "Bitte Internetverbindung pruefen und spaeter erneut "
+                    "versuchen.",
+                )
+            return
+        if not is_newer(release["tag"], __version__):
+            if manual:
+                QMessageBox.information(
+                    self.window, "Updates",
+                    f"Sie verwenden bereits die neueste Version "
+                    f"(v{__version__}).",
+                )
+            return
+        if not manual and release["tag"] == self.settings.skipped_version:
+            return
+        if not (getattr(sys, "frozen", False) and sys.platform == "win32"):
+            # Manueller Check aus der Entwicklungsumgebung heraus
+            QMessageBox.information(
+                self.window, "Update verfuegbar",
+                f"Version {release['tag']} ist verfuegbar. Die automatische "
+                "Installation gibt es nur in der installierten "
+                "Windows-Version.\n"
+                f"Download: https://github.com/{GITHUB_REPO}/releases",
+            )
+            return
+        self._offer_update(release, manual)
+
+    def _offer_update(self, release: dict, manual: bool):
+        box = QMessageBox(self.window)
+        box.setWindowTitle("Update verfuegbar")
+        box.setIcon(QMessageBox.Icon.Question)
+        box.setText(
+            "Eine neue Version von Johanna Assistenten ist verfuegbar.\n\n"
+            f"Installiert: v{__version__}\n"
+            f"Neu: {release['tag']}\n\n"
+            "Jetzt herunterladen und installieren?\n"
+            "Das Programm wird dazu neu gestartet. Ihre Daten (Ordner data) "
+            "bleiben erhalten."
+        )
+        install_btn = box.addButton(
+            "Jetzt installieren", QMessageBox.ButtonRole.AcceptRole
+        )
+        box.addButton("Spaeter", QMessageBox.ButtonRole.RejectRole)
+        skip_btn = None
+        if not manual:
+            skip_btn = box.addButton(
+                "Diese Version ueberspringen",
+                QMessageBox.ButtonRole.DestructiveRole,
+            )
+        box.exec()
+        clicked = box.clickedButton()
+        if clicked is install_btn:
+            self._install_update(release)
+        elif skip_btn is not None and clicked is skip_btn:
+            self.settings.skipped_version = release["tag"]
+            try:
+                save_settings(self.settings)
+            except Exception as e:
+                self._report_save_error(e, "Speichern der Einstellungen")
+
+    def _install_update(self, release: dict):
+        from updater import UpdateDownloader
+        # Nie mit ungesicherten Aenderungen updaten
+        if not self._save_current_guarded(context="Speichern vor dem Update"):
+            return
+
+        dialog = QProgressDialog(
+            "Update wird heruntergeladen...", "Abbrechen", 0, 100, self.window
+        )
+        dialog.setWindowTitle("Update")
+        dialog.setWindowModality(Qt.WindowModality.WindowModal)
+        dialog.setMinimumDuration(0)
+        dialog.setAutoClose(False)
+        dialog.setAutoReset(False)
+
+        downloader = UpdateDownloader(release["zip_url"], self.window)
+        self._update_downloader = downloader
+
+        def on_progress(received: int, total: int):
+            if total > 0:
+                dialog.setMaximum(100)
+                dialog.setValue(min(100, received * 100 // total))
+            else:
+                dialog.setMaximum(0)  # unbekannte Groesse: Laufbalken
+
+        def on_ok(new_dir):
+            dialog.close()
+            self._apply_update(new_dir)
+
+        def on_failed(message: str):
+            dialog.close()
+            self._report_update_failure(message)
+
+        downloader.progress.connect(on_progress)
+        downloader.finished_ok.connect(on_ok)
+        downloader.failed.connect(on_failed)
+        dialog.canceled.connect(downloader.cancel)
+        downloader.start()
+        dialog.exec()
+
+    def _apply_update(self, new_dir):
+        from pathlib import Path
+        from updater import launch_swap_and_restart
+        try:
+            launch_swap_and_restart(Path(new_dir), Path(sys.executable).parent)
+        except Exception as e:
+            self._report_update_failure(str(e))
+            return
+        # Alles ist gespeichert; das Tausch-Skript wartet auf das
+        # Programmende und startet dann die neue Version
+        self._autosave_timer.stop()
+        self.window.on_close_request = None
+        self.app.quit()
+
+    def _report_update_failure(self, message: str):
+        QMessageBox.critical(
+            self.window, "Update fehlgeschlagen",
+            f"Das Update konnte nicht installiert werden:\n\n{message}\n\n"
+            "Das Programm laeuft unveraendert weiter. Sie koennen das "
+            "Update auch manuell von GitHub herunterladen:\n"
+            f"https://github.com/{GITHUB_REPO}/releases",
+        )
+
     def run(self):
         self.window.show()
+        # Update-Check erst nach dem Fensteraufbau, ohne das UI zu blockieren
+        QTimer.singleShot(2000, self._check_updates_startup)
         return self.app.exec()
 
 

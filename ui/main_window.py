@@ -5,12 +5,13 @@ from PySide6.QtCore import Qt
 
 from .control_bar import ControlBar
 from .widgets.big_stepper import BigStepper
+from version import __version__
 
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Johanna Assistenten - Dienstplan")
+        self.setWindowTitle(f"Johanna Assistenten v{__version__} - Dienstplan")
         self.setGeometry(100, 100, 1200, 800)
 
         self.is_modified = False
@@ -102,7 +103,9 @@ class MainWindow(QMainWindow):
 
     def update_window_title(self):
         modified = "*" if self.is_modified else ""
-        self.setWindowTitle(f"Johanna Assistenten - {self._title_plan}{modified}")
+        self.setWindowTitle(
+            f"Johanna Assistenten v{__version__} - {self._title_plan}{modified}"
+        )
 
     def mark_modified(self):
         self.is_modified = True

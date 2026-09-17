@@ -434,6 +434,28 @@ Datendateien müssen nach jedem Update weiter funktionieren.** Dafür gilt:
   und ergänzt einen Migrationsschritt. Loader tolerieren fehlende Felder über
   Defaults.
 
+### Automatisches Programm-Update
+
+Die installierte Windows-Version hält sich selbst aktuell:
+
+- Beim Start prüft das Programm im Hintergrund, ob auf GitHub ein neueres
+  Release liegt (zusätzlich jederzeit über **Einstellungen → Nach Updates
+  suchen…**). Fehler bei der Prüfung (kein Internet, noch kein Release)
+  stören den Start nie — es passiert dann einfach nichts.
+- Gibt es ein Update, fragt ein Dialog: **„Jetzt installieren"**, **„Später"**
+  oder **„Diese Version überspringen"** (übersprungene Versionen meldet der
+  Start-Check nicht mehr, der manuelle Check schon).
+- Bei „Jetzt installieren" wird zuerst regulär gespeichert, dann das
+  Release-ZIP mit Fortschrittsanzeige heruntergeladen und geprüft. Nach dem
+  Beenden tauscht ein Hilfsskript den Programmordner aus und startet die
+  neue Version — **der `data`-Ordner bleibt dabei unangetastet**, die
+  Datendateien werden wie beschrieben beim nächsten Laden migriert.
+- Schlägt das Update fehl, läuft das Programm unverändert weiter; das ZIP
+  lässt sich immer auch manuell von GitHub herunterladen.
+- Die laufende Version steht im Fenstertitel (`version.py` ist die einzige
+  Quelle der Versionsnummer; Release-Tag und `pyproject.toml` müssen dazu
+  passen, der Build-Workflow prüft das).
+
 ## Vertraulichkeit
 
 Es geht um eine reale Teamverwaltung — **mit echten Personendaten wird vertraulich

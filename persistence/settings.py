@@ -29,6 +29,9 @@ class AppSettings:
     entry_colors: dict[str, str] = field(
         default_factory=lambda: dict(DEFAULT_ENTRY_COLORS)
     )
+    # Release-Tag, den der Nutzer beim Start-Update-Hinweis uebersprungen
+    # hat ("Diese Version ueberspringen"); der manuelle Check ignoriert das
+    skipped_version: str = ""
 
 
 def load_settings() -> AppSettings:
@@ -58,6 +61,7 @@ def load_settings() -> AppSettings:
                 if isinstance(v, str)
             },
         },
+        skipped_version=data.get("skipped_version", ""),
     )
 
 
