@@ -5,10 +5,14 @@ gut klickbare Bedienelemente und lesbare Schrift - zugleich kompakt genug,
 dass ein ganzer Monat auf den Bildschirm passt.
 Wer die Oberflaeche vergroessern/verkleinern will, aendert die Werte hier.
 """
-from PySide6.QtGui import QFont
+from PySide6.QtGui import QFont, QColor
 
 # Grundschrift der ganzen Anwendung (Punkt)
 FONT_PT = 10
+
+# Grau fuer Wochenenden UND bayerische Feiertage (models/holidays.py) -
+# ueberall dieselbe Farbe: Planraster, Urlaubs-Kalender, PDF-Export
+WEEKEND_COLOR = QColor(235, 235, 235)
 
 # Zeilenhoehe der Tabellen (Pixel)
 ROW_HEIGHT = 32
