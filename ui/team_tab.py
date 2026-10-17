@@ -1,19 +1,22 @@
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QTableWidget,
+    QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QPushButton, QTableWidget,
     QTableWidgetItem, QMessageBox, QHeaderView, QTabWidget, QComboBox,
 )
 from PySide6.QtCore import Signal
+from PySide6.QtGui import QFont
 
 from models import (
     Assistant, AssistantConstraints, MonthPlan,
-    AssistantSettings, SettingsProfile, apply_settings,
+    AssistantSettings, SettingsProfile, apply_settings, month_label,
 )
 from persistence import default_profiles
 import uuid
 
 from . import theme
-from .widgets.color_button import ColorButton
 from .widgets.big_stepper import BigStepper
+
+# Spalten der Vorlagen-Tabellen
+COL_NAME = 0
 
 # Auswahl fuer "RB anhaengen": Rufbereitschafts-Block direkt vor/nach dem
 # Dienstblock (fuer Helfer mit weiter Anreise, die am Stueck bleiben wollen)
@@ -26,7 +29,7 @@ ATTACH_OPTIONS = [
 
 
 class TeamTab(QWidget):
-    # Helferliste (Name/Farbe/Bestand) oder Plan-Einstellungen geaendert
+    # Helferliste (Name/Bestand/Reihenfolge) oder Plan-Einstellungen geaendert
     assistants_changed = Signal()
     # Eine Vorlage wurde geaendert (wird beim Speichern mitgesichert)
     profiles_changed = Signal()
@@ -40,13 +43,17 @@ class TeamTab(QWidget):
         self.init_ui()
 
     def init_ui(self):
-        # Abwesenheiten (Urlaub/Block) haben einen eigenen Tab - hier geht es
-        # nur um Helfer und ihre Planungs-Einstellungen
+        # Abwesenheiten (Urlaub/Wunsch) haben einen eigenen Tab - hier geht
+        # es nur um Helfer und ihre Planungs-Einstellungen. Die Helferfarbe
+        # wird hier bewusst nicht mehr gezeigt: im Plan tragen die
+        # Eintragsarten die Farbe, nicht die Personen
         layout = QVBoxLayout()
 
-        # Helfer-Buttons + zwei Einstellungs-Vorlagen als Tabs
-        left_layout = QVBoxLayout()
+        # Kopfzeile: Helfer-Buttons links, "In Dienstplan uebernehmen"
+        # kraeftig in der Mitte
+        left_buttons = QWidget()
         button_layout = QHBoxLayout()
+        button_layout.setContentsMargins(0, 0, 0, 0)
         self.add_btn = QPushButton("+ Helfer hinzufuegen")
         self.add_btn.clicked.connect(self.add_assistant)
         button_layout.addWidget(self.add_btn)
@@ -65,53 +72,58 @@ class TeamTab(QWidget):
         self.down_btn.setToolTip("Gewaehlten Helfer in der Liste nach unten verschieben")
         self.down_btn.clicked.connect(lambda: self.move_assistant(1))
         button_layout.addWidget(self.down_btn)
+        left_buttons.setLayout(button_layout)
 
-        button_layout.addStretch()
-        left_layout.addLayout(button_layout)
+        # Uebertraegt die gerade sichtbare Vorlage (Text nennt Vorlage und
+        # Monat, siehe _update_apply_button)
+        self.apply_btn = QPushButton("In Dienstplan uebernehmen")
+        self.apply_btn.setProperty("role", "primary")
+        self.apply_btn.setToolTip(
+            "Uebertraegt die Einstellungen der gerade gezeigten Vorlage in den "
+            "Dienstplan des aktuell geoeffneten Monats."
+        )
+        self.apply_btn.clicked.connect(
+            lambda: self.apply_profile(self.profile_tabs.currentIndex())
+        )
+
+        # Drei Spalten, aussen gleich breit -> der Button sitzt wirklich mittig
+        head = QGridLayout()
+        head.addWidget(left_buttons, 0, 0)
+        head.addWidget(self.apply_btn, 0, 1)
+        head.setColumnStretch(0, 1)
+        head.setColumnStretch(2, 1)
+        head.setColumnMinimumWidth(2, left_buttons.sizeHint().width())
+        layout.addLayout(head)
 
         # Zwei Vorlagen: Einstellungen getrennt vorbereiten und per Button
         # in den Dienstplan des aktuellen Monats uebernehmen
         self.profile_tabs = QTabWidget()
+        self.profile_tabs.currentChanged.connect(self._update_apply_button)
         self._tables: list[QTableWidget] = []
-        self._apply_buttons: list[QPushButton] = []
+        table_font = QFont()
+        table_font.setPointSize(theme.TEAM_FONT_PT)
         for idx in range(2):
-            page = QWidget()
-            page_layout = QVBoxLayout()
-
             table = QTableWidget()
-            table.setColumnCount(9)
+            table.setColumnCount(8)
             # Max steht jeweils links von Min: Max begrenzt Min, wird also
             # zuerst eingestellt (sonst zieht ein spaeter gesetztes Max das
             # Min wieder zurueck)
             table.setHorizontalHeaderLabels([
-                "Farbe", "Name", "Max. Dienste", "Min. Dienste",
+                "Name", "Max. Dienste", "Min. Dienste",
                 "Max. Folge", "Min. Block", "Abstand", "Freiwuensche",
                 "RB anhaengen",
             ])
+            # Abwechselnd gefaerbte Zeilen im Ton des Farbschemas
+            # (QPalette.AlternateBase = theme.stripe)
+            table.setAlternatingRowColors(True)
+            table.setFont(table_font)
             table.itemChanged.connect(
                 lambda item, i=idx: self.on_name_edited(i, item)
             )
-            page_layout.addWidget(table)
-
-            apply_layout = QHBoxLayout()
-            apply_btn = QPushButton("In Dienstplan uebernehmen")
-            apply_btn.setToolTip(
-                "Uebertraegt die Einstellungen dieser Vorlage in den "
-                "Dienstplan des aktuell geoeffneten Monats."
-            )
-            apply_btn.clicked.connect(lambda _, i=idx: self.apply_profile(i))
-            apply_layout.addWidget(apply_btn)
-            apply_layout.addStretch()
-            page_layout.addLayout(apply_layout)
-
-            page.setLayout(page_layout)
-            self.profile_tabs.addTab(page, f"Vorlage {idx + 1}")
+            self.profile_tabs.addTab(table, f"Vorlage {idx + 1}")
             self._tables.append(table)
-            self._apply_buttons.append(apply_btn)
 
-        left_layout.addWidget(self.profile_tabs)
-        layout.addLayout(left_layout)
-
+        layout.addWidget(self.profile_tabs)
         self.setLayout(layout)
 
     def set_plan(self, plan: MonthPlan):
@@ -187,7 +199,7 @@ class TeamTab(QWidget):
         elif field == "gap":
             s.min_gap_days = value
         elif field == "quota":
-            # Freiwunsch-Kontingent; "Alle" (None) = alle Blocks hart
+            # Freiwunsch-Kontingent; "Alle" (None) = alle Wunsch-Tage hart
             s.free_wish_quota = None if value < 0 else value
 
         self.profiles_changed.emit()
@@ -200,7 +212,7 @@ class TeamTab(QWidget):
     def on_name_edited(self, profile_idx: int, item: QTableWidgetItem):
         """Namensaenderung in einer der beiden Tabellen sofort uebernehmen
         und in der anderen Tabelle spiegeln."""
-        if self._refreshing or item.column() != 1 or not self.plan:
+        if self._refreshing or item.column() != COL_NAME or not self.plan:
             return
         row = item.row()
         if row >= len(self.plan.assistants):
@@ -209,7 +221,7 @@ class TeamTab(QWidget):
         if assistant.name == item.text():
             return
         assistant.name = item.text()
-        other = self._tables[1 - profile_idx].item(row, 1)
+        other = self._tables[1 - profile_idx].item(row, COL_NAME)
         if other is not None:
             self._refreshing = True
             other.setText(assistant.name)
@@ -222,46 +234,35 @@ class TeamTab(QWidget):
 
         self._refreshing = True
         self._steppers = {}
-
-        if self.plan:
-            month_text = f"{self.plan.year}-{self.plan.month:02d}"
-            for btn in self._apply_buttons:
-                btn.setText(f"In Dienstplan {month_text} uebernehmen")
+        self._update_apply_button()
 
         for profile_idx, table in enumerate(self._tables):
             self.profile_tabs.setTabText(
                 profile_idx, self.profiles[profile_idx].name
             )
             table.setRowCount(len(self.plan.assistants))
-            table.verticalHeader().setDefaultSectionSize(theme.ROW_HEIGHT)
+            table.verticalHeader().setDefaultSectionSize(theme.TEAM_ROW_HEIGHT)
 
             for i, assistant in enumerate(self.plan.assistants):
                 s = self._profile_settings(profile_idx, assistant.id)
 
-                color_btn = ColorButton(assistant.color)
-                color_btn.color_changed.connect(
-                    lambda new_color, aid=assistant.id:
-                    self.update_assistant_color(aid, new_color)
-                )
-                table.setCellWidget(i, 0, color_btn)
+                table.setItem(i, COL_NAME, QTableWidgetItem(assistant.name))
 
-                table.setItem(i, 1, QTableWidgetItem(assistant.name))
-
-                table.setCellWidget(i, 2, self._make_stepper(
+                table.setCellWidget(i, 1, self._make_stepper(
                     profile_idx, assistant, "max_target", "Max. Dienste",
                     -1 if s.max_shifts is None else s.max_shifts, -1, 31,
                     special_min_text="Auto",
                 ))
-                table.setCellWidget(i, 3, self._make_stepper(
+                table.setCellWidget(i, 2, self._make_stepper(
                     profile_idx, assistant, "min_target", "Min. Dienste",
                     -1 if s.min_shifts is None else s.min_shifts, -1, 31,
                     special_min_text="Auto",
                 ))
-                table.setCellWidget(i, 4, self._make_stepper(
+                table.setCellWidget(i, 3, self._make_stepper(
                     profile_idx, assistant, "max", "Max. Folge",
                     s.max_consecutive_days, 1, 7,
                 ))
-                table.setCellWidget(i, 5, self._make_stepper(
+                table.setCellWidget(i, 4, self._make_stepper(
                     profile_idx, assistant, "min", "Min. Block",
                     s.min_block_days, 1, 7,
                 ))
@@ -274,7 +275,7 @@ class TeamTab(QWidget):
                     "Einsatzbloecken dieser Person (Dienst und "
                     "Rufbereitschaft zusammen). Harte Regel."
                 )
-                table.setCellWidget(i, 6, gap_stepper)
+                table.setCellWidget(i, 5, gap_stepper)
 
                 quota_stepper = self._make_stepper(
                     profile_idx, assistant, "quota", "Freiwuensche",
@@ -282,13 +283,13 @@ class TeamTab(QWidget):
                     -1, 31, special_min_text="Alle",
                 )
                 quota_stepper.setToolTip(
-                    "Freiwunsch-Kontingent: so viele Block-Tage im Monat "
+                    "Freiwunsch-Kontingent: so viele Wunsch-Tage im Monat "
                     "haben Vorrang (werden nie ueberplant). Weitere "
-                    "Block-Tage haben Nachrang und duerfen im Konfliktfall "
+                    "Wunsch-Tage haben Nachrang und duerfen im Konfliktfall "
                     "ueberplant werden - Urlaub nie.\n"
-                    "'Alle' = kein Kontingent, alle Blocks hart wie bisher."
+                    "'Alle' = kein Kontingent, alle Wuensche hart wie Urlaub."
                 )
-                table.setCellWidget(i, 7, quota_stepper)
+                table.setCellWidget(i, 6, quota_stepper)
 
                 attach_combo = QComboBox()
                 for label, value in ATTACH_OPTIONS:
@@ -308,21 +309,29 @@ class TeamTab(QWidget):
                     lambda _, c=attach_combo, p=profile_idx, aid=assistant.id:
                     self.on_attach_changed(p, aid, c.currentData())
                 )
-                table.setCellWidget(i, 8, attach_combo)
+                table.setCellWidget(i, 7, attach_combo)
 
-            # Kompakte Spalten: schmale Namensspalte, Rest nach Inhalt;
+            # Feste Spalten etwas grosszuegiger als die Stepper selbst;
             # rechts darf Rand bleiben
             header = table.horizontalHeader()
             header.setStretchLastSection(False)
             header.setSectionResizeMode(QHeaderView.ResizeMode.Fixed)
-            table.setColumnWidth(0, 56)
-            table.setColumnWidth(1, 120)
-            for col in (2, 3, 4, 5, 6, 7):
-                table.setColumnWidth(col, theme.STEPPER_WIDTH)
-            table.setColumnWidth(8, 110)
+            table.setColumnWidth(COL_NAME, theme.TEAM_NAME_COL_W)
+            for col in range(1, 7):
+                table.setColumnWidth(col, theme.STEPPER_WIDTH + 12)
+            table.setColumnWidth(7, 130)
 
         self._refreshing = False
         self.add_btn.setEnabled(len(self.plan.assistants) < 10)
+
+    def _update_apply_button(self, *_):
+        if not self.plan:
+            return
+        profile = self.profiles[self.profile_tabs.currentIndex()]
+        self.apply_btn.setText(
+            f"{profile.name} in Dienstplan "
+            f"{month_label(self.plan.year, self.plan.month)} uebernehmen"
+        )
 
     def apply_profile(self, profile_idx: int):
         """Uebertraegt die Vorlage in den Dienstplan des aktuellen Monats."""
@@ -338,7 +347,7 @@ class TeamTab(QWidget):
         QMessageBox.information(
             self, "Uebernommen",
             f"Die Einstellungen aus '{profile.name}' gelten jetzt fuer den "
-            f"Dienstplan {self.plan.year}-{self.plan.month:02d}.",
+            f"Dienstplan {month_label(self.plan.year, self.plan.month)}.",
         )
 
     def add_assistant(self):
@@ -394,21 +403,6 @@ class TeamTab(QWidget):
         assistants = self.plan.assistants
         assistants[row], assistants[new_row] = assistants[new_row], assistants[row]
         self.refresh_table()
-        table.setCurrentCell(new_row, 1)
+        table.setCurrentCell(new_row, COL_NAME)
         self.assistants_changed.emit()
 
-    def update_assistant_color(self, assistant_id: str, color: str):
-        assistant = self._assistant_by_id(assistant_id)
-        if assistant is None:
-            return
-        assistant.color = color
-        # Farbknopf der jeweils anderen Tabelle mitziehen
-        row = self.plan.assistants.index(assistant)
-        for table in self._tables:
-            widget = table.cellWidget(row, 0)
-            if isinstance(widget, ColorButton) and widget.current_color != color:
-                widget.set_color(color)
-        self.assistants_changed.emit()
-
-    def _assistant_by_id(self, assistant_id: str) -> Assistant | None:
-        return next((a for a in self.plan.assistants if a.id == assistant_id), None)

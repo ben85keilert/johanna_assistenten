@@ -1,32 +1,39 @@
-"""Tab "Urlaub": Abwesenheiten (Urlaub und Block) eintragen und einsehen.
+"""Tab "Urlaub und Notizen": Abwesenheiten (Urlaub und Wunsch) eintragen
+und einsehen, dazu alle Tagesnotizen des Monats.
 
-Links ein Monatskalender in Wochenform - uebersichtlicher als das
-Dienstplan-Raster und bewusst nur fuer die zwei Abwesenheitsarten. Rechts die
-chronologische Liste aller Abwesenheiten mit Hinzufuegen/Bearbeiten/Entfernen.
-Monat und Person werden oben in der Tab-Zeile gewaehlt.
+Links die Helfer-Buttons (fuer wen angezeigt und eingetragen wird; Strg+Klick
+waehlt mehrere, "Alle" alle), daneben ein Monatskalender in Wochenform -
+uebersichtlicher als das Dienstplan-Raster und bewusst nur fuer die zwei
+Abwesenheitsarten. Rechts zwei Reiter: "Abwesenheiten" (chronologische Liste
+mit Hinzufuegen/Bearbeiten/Entfernen) und "Notizen" (ui/notes_panel.py).
+Der Monat ist immer der des Dienstplans (gemeinsamer Monatswaehler in der
+Tab-Zeile).
 
-Die Daten liegen wie bisher in den Constraints der Helfer (team.json,
-monatsuebergreifend) - dieser Tab ist nur eine andere Sicht darauf.
+Die Abwesenheiten liegen wie bisher in den Constraints der Helfer
+(team.json, monatsuebergreifend) - dieser Tab ist nur eine andere Sicht
+darauf. "Wunsch" ist die Oberflaechen-Bezeichnung der Freiwunsch-Tage
+(intern weiter blocked_dates/blocked_ranges, Dateiformat unveraendert).
 """
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QComboBox,
     QGroupBox, QListWidget, QListWidgetItem, QTableWidget, QTableWidgetItem,
     QHeaderView, QAbstractItemView, QMessageBox, QDialog, QDateEdit, QMenu,
+    QTabWidget, QApplication,
 )
-from PySide6.QtCore import Qt, Signal, QDate
-from PySide6.QtGui import QColor, QPixmap, QFont
+from PySide6.QtCore import Qt, Signal, QDate, QTimer
+from PySide6.QtGui import QColor, QFont
 
 from models import (
     Assistant, MonthPlan,
     absence_days, set_absence_days, blocked_days, set_blocked_days,
     holiday_name,
 )
-from persistence import AppSettings
+from persistence import AppSettings, DEFAULT_ENTRY_COLORS
 from datetime import date, timedelta
 import calendar
 
 from . import theme
-from .widgets.month_selector import MonthSelector
+from .notes_panel import NotesPanel
 
 WEEKDAYS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
 
@@ -35,70 +42,56 @@ STAMP_VACATION = "urlaub"
 STAMP_BLOCK = "block"
 STAMP_CLEAR = "clear"
 
-MIXED_COLOR = QColor(224, 224, 224)      # Urlaub+Block (nur in der Alle-Ansicht)
-OUTSIDE_COLOR = QColor(245, 245, 245)    # Tag gehoert nicht zum Monat
-
 
 class AbsenceTab(QWidget):
     # Abwesenheiten geaendert -> Plan neu zeichnen und als geaendert markieren
     absences_changed = Signal()
+    # Weitergereicht aus dem Notizen-Reiter (NotesPanel)
+    notes_changed = Signal()
+    notes_export_requested = Signal()
+    # Listeneintrag in einem anderen Monat angeklickt -> alle Tabs wechseln
+    month_change_requested = Signal(int, int)
 
     def __init__(self, settings: AppSettings, parent=None):
         super().__init__(parent)
         self.plan: MonthPlan | None = None
-        # Urlaub-/Block-Farbe kommen aus Einstellungen > Farben
+        # Urlaub-/Wunsch-Farbe kommen aus Einstellungen > Farben
         self.settings = settings
+        # Immer der Monat des Dienstplans (ein Monat fuer alle Tabs)
         self.year = date.today().year
         self.month = date.today().month
         self.active_stamp: str | None = None
+        # Links gewaehlte Helfer: fuer sie wird angezeigt und eingetragen
+        self._selected_ids: set[str] = set()
+        self._person_buttons: dict[str, QPushButton] = {}
         self._building = False
         self.init_ui()
 
     # --- Aufbau ---------------------------------------------------------
 
-    def _init_top_bar(self):
-        """Monat, Person und Listenfilter; sitzt in der Tab-Zeile
-        (Corner-Widget), sichtbar solange dieser Tab aktiv ist."""
-        self.top_bar = QWidget()
-        layout = QHBoxLayout()
-        layout.setContentsMargins(0, 0, 8, 0)
-
-        self.month_selector = MonthSelector()
-        self.month_selector.layout().setContentsMargins(0, 0, 0, 0)
-        self.month_selector.month_changed.connect(self.on_month_changed)
-        layout.addWidget(self.month_selector)
-
-        layout.addWidget(QLabel("Person:"))
-        self.person_combo = QComboBox()
-        self.person_combo.setToolTip(
-            "Wessen Abwesenheiten im Kalender gezeigt und eingetragen werden."
-        )
-        self.person_combo.currentIndexChanged.connect(self.on_person_changed)
-        layout.addWidget(self.person_combo)
-
-        self.only_month_btn = QPushButton("Nur dieser Monat")
-        self.only_month_btn.setCheckable(True)
-        self.only_month_btn.setToolTip(
-            "Liste rechts auf den oben gewaehlten Monat beschraenken."
-        )
-        self.only_month_btn.toggled.connect(self.refresh_list)
-        layout.addWidget(self.only_month_btn)
-
-        self.show_past_btn = QPushButton("Vergangene anzeigen")
-        self.show_past_btn.setCheckable(True)
-        self.show_past_btn.setToolTip(
-            "Bereits abgelaufene Abwesenheiten ein-/ausblenden."
-        )
-        self.show_past_btn.toggled.connect(self.refresh_list)
-        layout.addWidget(self.show_past_btn)
-
-        self.top_bar.setLayout(layout)
-
     def init_ui(self):
-        self._init_top_bar()
         layout = QHBoxLayout()
 
-        # --- Links: Kalender ---
+        # --- Links: Helfer-Auswahl ---
+        person_group = QGroupBox("Helfer")
+        person_layout = QVBoxLayout()
+        self.all_btn = QPushButton("Alle")
+        self.all_btn.setCheckable(True)
+        self.all_btn.setToolTip("Alle Helfer auswaehlen")
+        self.all_btn.clicked.connect(self.select_all_persons)
+        person_layout.addWidget(self.all_btn)
+        # Die Namens-Buttons baut _refresh_person_buttons hier hinein
+        self._person_layout = QVBoxLayout()
+        self._person_layout.setSpacing(4)
+        person_layout.addLayout(self._person_layout)
+        person_layout.addStretch()
+        hint = QLabel("Klick: nur diese Person\nStrg+Klick: mehrere")
+        hint.setProperty("role", "muted")
+        person_layout.addWidget(hint)
+        person_group.setLayout(person_layout)
+        layout.addWidget(person_group)
+
+        # --- Mitte: Kalender ---
         calendar_group = QGroupBox("Kalender")
         calendar_layout = QVBoxLayout()
 
@@ -108,21 +101,21 @@ class AbsenceTab(QWidget):
         for stamp, label, tip in [
             (STAMP_VACATION, "Urlaub",
              "Tag anklicken: Urlaub setzen bzw. wieder entfernen."),
-            (STAMP_BLOCK, "Block",
-             "Tag anklicken: Block setzen bzw. wieder entfernen "
-             "(zweite Abwesenheitsart neben Urlaub)."),
+            (STAMP_BLOCK, "Wunsch",
+             "Tag anklicken: Freiwunsch setzen bzw. wieder entfernen "
+             "(die Person moechte frei haben - kein Urlaub)."),
             (STAMP_CLEAR, "Loeschen",
-             "Tag anklicken: Urlaub oder Block dieses Tages entfernen."),
+             "Tag anklicken: Urlaub oder Wunsch dieses Tages entfernen."),
         ]:
             btn = QPushButton(label)
             btn.setCheckable(True)
-            btn.setToolTip(tip)
+            btn.setToolTip(tip + " Gilt fuer alle links gewaehlten Helfer.")
             btn.toggled.connect(lambda checked, s=stamp: self.on_stamp_toggled(s, checked))
             self.stamp_buttons[stamp] = btn
             stamp_layout.addWidget(btn)
 
         self.hint_label = QLabel()
-        self.hint_label.setStyleSheet("color: #B05000;")
+        self.hint_label.setProperty("role", "warning")
         stamp_layout.addWidget(self.hint_label)
         stamp_layout.addStretch()
         calendar_layout.addLayout(stamp_layout)
@@ -136,6 +129,7 @@ class AbsenceTab(QWidget):
         self.calendar.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.calendar.customContextMenuRequested.connect(self.show_context_menu)
         self.calendar.cellClicked.connect(self.on_cell_clicked)
+        self.calendar.cellDoubleClicked.connect(self.on_cell_double_clicked)
         self.calendar.horizontalHeader().setSectionResizeMode(
             QHeaderView.ResizeMode.Stretch
         )
@@ -145,15 +139,36 @@ class AbsenceTab(QWidget):
         calendar_layout.addWidget(self.calendar)
 
         self.legend_label = QLabel()
+        self.legend_label.setWordWrap(True)
         calendar_layout.addWidget(self.legend_label)
         self._update_legend()
 
         calendar_group.setLayout(calendar_layout)
-        layout.addWidget(calendar_group, stretch=3)
+        layout.addWidget(calendar_group, stretch=2)
 
-        # --- Rechts: chronologische Liste ---
-        list_group = QGroupBox("Abwesenheiten (chronologisch)")
+        # --- Rechts: Reiter Abwesenheiten (chronologische Liste) | Notizen ---
+        self.side_tabs = QTabWidget()
+        list_page = QWidget()
         list_layout = QVBoxLayout()
+
+        filter_layout = QHBoxLayout()
+        self.only_month_btn = QPushButton("Nur dieser Monat")
+        self.only_month_btn.setCheckable(True)
+        self.only_month_btn.setToolTip(
+            "Liste auf den oben gewaehlten Monat beschraenken."
+        )
+        self.only_month_btn.toggled.connect(self.refresh_list)
+        filter_layout.addWidget(self.only_month_btn)
+        self.show_past_btn = QPushButton("Vergangene anzeigen")
+        self.show_past_btn.setCheckable(True)
+        self.show_past_btn.setToolTip(
+            "Bereits abgelaufene Abwesenheiten ein-/ausblenden."
+        )
+        self.show_past_btn.toggled.connect(self.refresh_list)
+        filter_layout.addWidget(self.show_past_btn)
+        filter_layout.addStretch()
+        list_layout.addLayout(filter_layout)
+
         self.absence_list = QListWidget()
         self.absence_list.itemDoubleClicked.connect(lambda _: self.edit_absence())
         self.absence_list.itemSelectionChanged.connect(self.on_list_selection)
@@ -172,30 +187,51 @@ class AbsenceTab(QWidget):
         list_buttons.addStretch()
         list_layout.addLayout(list_buttons)
 
-        list_group.setLayout(list_layout)
-        layout.addWidget(list_group, stretch=2)
+        list_page.setLayout(list_layout)
+        self.side_tabs.addTab(list_page, "Abwesenheiten")
+
+        self.notes_panel = NotesPanel()
+        self.notes_panel.notes_changed.connect(self._on_notes_changed)
+        self.notes_panel.export_requested.connect(self.notes_export_requested.emit)
+        self.side_tabs.addTab(self.notes_panel, "Notizen")
+        layout.addWidget(self.side_tabs, stretch=1)
 
         self.setLayout(layout)
 
     # --- Aussenschnittstelle -------------------------------------------
 
     def set_plan(self, plan: MonthPlan):
-        """Neuer Monatsplan: Kalender folgt dem Monat des Dienstplans."""
+        """Neuer Monatsplan: Kalender und Notizen folgen seinem Monat."""
         self.plan = plan
         self.year, self.month = plan.year, plan.month
-        self.month_selector.set_month(self.year, self.month)
+        self.notes_panel.set_plan(plan)
         self.refresh_all()
 
     def refresh_all(self):
-        self._refresh_person_combo()
+        self._refresh_person_buttons()
         self.refresh_calendar()
         self.refresh_list()
+        self.notes_panel.refresh()
+
+    def refresh_notes(self):
+        """Notizen anderswo geaendert (Dienstplan-Dialog)."""
+        self.notes_panel.refresh()
+        self.refresh_calendar()
+
+    def _on_notes_changed(self):
+        # Notizsymbole im Kalender nachziehen und weitermelden
+        self.refresh_calendar()
+        self.notes_changed.emit()
 
     def _vacation_color(self) -> QColor:
-        return QColor(self.settings.entry_colors.get("VACATION", "#81C784"))
+        return QColor(self.settings.entry_colors.get(
+            "VACATION", DEFAULT_ENTRY_COLORS["VACATION"]
+        ))
 
     def _block_color(self) -> QColor:
-        return QColor(self.settings.entry_colors.get("BLOCK", "#E57373"))
+        return QColor(self.settings.entry_colors.get(
+            "BLOCK", DEFAULT_ENTRY_COLORS["BLOCK"]
+        ))
 
     def _update_legend(self):
         # Farbige Kaestchen in der Legende folgen den eingestellten Farben
@@ -203,40 +239,77 @@ class AbsenceTab(QWidget):
             f'<span style="background-color:{self._vacation_color().name()};">'
             "&nbsp;&nbsp;&nbsp;</span> Urlaub &nbsp;&nbsp; "
             f'<span style="background-color:{self._block_color().name()};">'
-            "&nbsp;&nbsp;&nbsp;</span> Block &nbsp;&nbsp; "
+            "&nbsp;&nbsp;&nbsp;</span> Wunsch &nbsp;&nbsp; "
+            f"{theme.NOTE_ICON} Notiz (Doppelklick auf einen Tag) &nbsp;&nbsp; "
             "Mehrfachauswahl mit Strg/Shift, dann Rechtsklick"
         )
 
-    # --- Kopfzeile ------------------------------------------------------
+    # --- Helfer-Auswahl (links) ------------------------------------------
 
-    def on_month_changed(self, year: int, month: int):
-        self.year, self.month = year, month
-        self.refresh_calendar()
-        self.refresh_list()
-
-    def on_person_changed(self):
-        self.refresh_calendar()
-        self.refresh_list()
-
-    def _refresh_person_combo(self):
-        """Personenliste neu aufbauen, Auswahl bleibt erhalten."""
+    def _refresh_person_buttons(self):
+        """Ein Button je Helfer; die Auswahl bleibt erhalten (Standard: alle)."""
         if not self.plan:
             return
-        selected = self.person_combo.currentData()
-        self.person_combo.blockSignals(True)
-        self.person_combo.clear()
-        self.person_combo.addItem("Alle Helfer", None)
+        while self._person_layout.count():
+            widget = self._person_layout.takeAt(0).widget()
+            if widget is not None:
+                widget.deleteLater()
+        self._person_buttons = {}
+        ids = [a.id for a in self.plan.assistants]
+        self._selected_ids &= set(ids)
+        if not self._selected_ids:
+            self._selected_ids = set(ids)
         for assistant in self.plan.assistants:
-            pixmap = QPixmap(12, 12)
-            pixmap.fill(QColor(assistant.color))
-            self.person_combo.addItem(pixmap, assistant.name, assistant.id)
-        index = self.person_combo.findData(selected)
-        self.person_combo.setCurrentIndex(index if index >= 0 else 0)
-        self.person_combo.blockSignals(False)
+            btn = QPushButton(assistant.name)
+            btn.setCheckable(True)
+            btn.setToolTip(
+                f"Nur {assistant.name} zeigen und eintragen "
+                "(Strg+Klick: zur Auswahl hinzufuegen/entfernen)"
+            )
+            btn.clicked.connect(
+                lambda _checked=False, aid=assistant.id: self.on_person_clicked(aid)
+            )
+            self._person_layout.addWidget(btn)
+            self._person_buttons[assistant.id] = btn
+        self._sync_person_buttons()
 
-    def _selected_assistant(self) -> Assistant | None:
-        """Die im Kopf gewaehlte Person; None = "Alle Helfer"."""
-        return self._assistant_by_id(self.person_combo.currentData())
+    def _sync_person_buttons(self):
+        for aid, btn in self._person_buttons.items():
+            btn.setChecked(aid in self._selected_ids)
+        self.all_btn.setChecked(
+            bool(self._person_buttons)
+            and self._selected_ids == set(self._person_buttons)
+        )
+
+    def on_person_clicked(self, assistant_id: str):
+        """Klick: nur diese Person. Strg+Klick: zur Auswahl hinzufuegen bzw.
+        herausnehmen (mindestens eine Person bleibt gewaehlt)."""
+        ctrl = QApplication.keyboardModifiers() & Qt.KeyboardModifier.ControlModifier
+        if ctrl:
+            if assistant_id in self._selected_ids:
+                if len(self._selected_ids) > 1:
+                    self._selected_ids.discard(assistant_id)
+            else:
+                self._selected_ids.add(assistant_id)
+        else:
+            self._selected_ids = {assistant_id}
+        self._on_selection_changed()
+
+    def select_all_persons(self):
+        if self.plan:
+            self._selected_ids = {a.id for a in self.plan.assistants}
+        self._on_selection_changed()
+
+    def _on_selection_changed(self):
+        self._sync_person_buttons()
+        self.refresh_calendar()
+        self.refresh_list()
+
+    def _selected_assistants(self) -> list[Assistant]:
+        """Die links gewaehlten Helfer in Team-Reihenfolge."""
+        if not self.plan:
+            return []
+        return [a for a in self.plan.assistants if a.id in self._selected_ids]
 
     def _assistant_by_id(self, assistant_id) -> Assistant | None:
         if not self.plan or assistant_id is None:
@@ -259,25 +332,35 @@ class AbsenceTab(QWidget):
         self._update_hint()
 
     def _update_hint(self):
-        if self._selected_assistant() is None:
-            self.hint_label.setText("Zum Eintragen oben eine Person waehlen")
-        elif self.active_stamp is None:
-            self.hint_label.setText("")
+        """Bei mehreren gewaehlten Helfern daran erinnern, dass ein Stempel
+        fuer alle gilt."""
+        count = len(self._selected_ids)
+        if self.active_stamp is not None and count > 1:
+            self.hint_label.setText(f"Eintragen fuer {count} Helfer gleichzeitig")
         else:
             self.hint_label.setText("")
 
     def on_cell_clicked(self, row: int, col: int):
+        item = self.calendar.item(row, col)
+        day = item.data(Qt.ItemDataRole.UserRole) if item else None
+        if day is None:
+            return
         if self.active_stamp is None:
+            # Ohne Stempel: Tag im Notizen-Reiter mitwaehlen
+            self.notes_panel.select_day(day)
+            return
+        self.apply_stamp(self.active_stamp, [day], self._selected_assistants())
+
+    def on_cell_double_clicked(self, row: int, col: int):
+        """Doppelklick (ohne Stempel): Notiz des Tages bearbeiten."""
+        if self.active_stamp is not None:
             return
         item = self.calendar.item(row, col)
         day = item.data(Qt.ItemDataRole.UserRole) if item else None
         if day is None:
             return
-        assistant = self._selected_assistant()
-        if assistant is None:
-            self._update_hint()
-            return
-        self.apply_stamp(self.active_stamp, [day], assistant)
+        self.side_tabs.setCurrentWidget(self.notes_panel)
+        self.notes_panel.select_day(day, focus=True)
 
     def _selected_days(self, fallback_pos=None) -> list[int]:
         days = []
@@ -295,76 +378,79 @@ class AbsenceTab(QWidget):
 
     def show_context_menu(self, pos):
         days = self._selected_days(fallback_pos=pos)
-        if not days:
-            return
-        assistant = self._selected_assistant()
-        if assistant is None:
-            QMessageBox.information(
-                self, "Person waehlen",
-                "Bitte oben eine Person waehlen, deren Abwesenheiten "
-                "eingetragen werden sollen.",
-            )
+        assistants = self._selected_assistants()
+        if not days or not assistants:
             return
 
-        suffix = f" ({len(days)} Tage)" if len(days) > 1 else ""
+        who = assistants[0].name if len(assistants) == 1 else f"{len(assistants)} Helfer"
+        count = f"{len(days)} Tage, " if len(days) > 1 else ""
+        suffix = f" ({count}{who})"
         menu = QMenu()
         menu.addAction(
             f"Urlaub setzen{suffix}",
-            lambda: self.apply_stamp(STAMP_VACATION, days, assistant, toggle=False),
+            lambda: self.apply_stamp(STAMP_VACATION, days, assistants, toggle=False),
         )
         menu.addAction(
-            f"Block setzen{suffix}",
-            lambda: self.apply_stamp(STAMP_BLOCK, days, assistant, toggle=False),
+            f"Wunsch setzen{suffix}",
+            lambda: self.apply_stamp(STAMP_BLOCK, days, assistants, toggle=False),
         )
         menu.addSeparator()
         menu.addAction(
             f"Abwesenheit entfernen{suffix}",
-            lambda: self.apply_stamp(STAMP_CLEAR, days, assistant),
+            lambda: self.apply_stamp(STAMP_CLEAR, days, assistants),
         )
         menu.exec(self.calendar.mapToGlobal(pos))
 
-    def apply_stamp(self, stamp: str, days: list[int], assistant: Assistant,
+    def apply_stamp(self, stamp: str, days: list[int], assistants: list[Assistant],
                     toggle: bool = True):
-        """Setzt/entfernt Urlaub oder Block an den Tagen dieses Monats.
+        """Setzt/entfernt Urlaub oder Wunsch an den Tagen dieses Monats - fuer
+        alle uebergebenen (links gewaehlten) Helfer.
 
-        toggle=True (Klick): ein bereits gesetzter Tag wird wieder entfernt.
-        toggle=False (Kontextmenue): setzt fuer alle Tage der Auswahl.
-        Urlaub und Block schliessen sich gegenseitig aus.
+        toggle=True (Klick): haben alle den Tag schon, wird er bei allen
+        entfernt, sonst bei allen gesetzt. toggle=False (Kontextmenue): setzt
+        fuer alle Tage der Auswahl. Urlaub und Wunsch schliessen sich
+        gegenseitig aus.
         """
-        c = assistant.constraints
-        vacation = absence_days(c)
-        blocked = blocked_days(c)
+        if not assistants:
+            return
+        # Tagesmengen je Helfer (Urlaub, Wunsch) - erst am Ende zurueckschreiben
+        sets = {
+            a.id: (absence_days(a.constraints), blocked_days(a.constraints))
+            for a in assistants
+        }
         changed = False
 
         for day in days:
             d = date(self.year, self.month, day)
             if stamp == STAMP_CLEAR:
-                if d in vacation:
-                    vacation.discard(d)
-                    changed = True
-                if d in blocked:
-                    blocked.discard(d)
-                    changed = True
+                for vacation, blocked in sets.values():
+                    if d in vacation or d in blocked:
+                        vacation.discard(d)
+                        blocked.discard(d)
+                        changed = True
                 continue
 
-            target, other = (
-                (vacation, blocked) if stamp == STAMP_VACATION else (blocked, vacation)
-            )
-            if d in target:
+            index = 0 if stamp == STAMP_VACATION else 1
+            if all(d in pair[index] for pair in sets.values()):
                 if toggle:
-                    target.discard(d)
+                    for pair in sets.values():
+                        pair[index].discard(d)
                     changed = True
                 continue
-            target.add(d)
-            other.discard(d)
-            changed = True
+            for pair in sets.values():
+                if d not in pair[index]:
+                    pair[index].add(d)
+                    pair[1 - index].discard(d)
+                    changed = True
 
         if not changed:
             return
 
         # Zusammenhaengende Tage werden dabei zu Zeitraeumen zusammengefasst
-        set_absence_days(c, vacation)
-        set_blocked_days(c, blocked)
+        for assistant in assistants:
+            vacation, blocked = sets[assistant.id]
+            set_absence_days(assistant.constraints, vacation)
+            set_blocked_days(assistant.constraints, blocked)
         self.refresh_calendar()
         self.refresh_list()
         self.absences_changed.emit()
@@ -374,30 +460,32 @@ class AbsenceTab(QWidget):
     def _day_state(self, day: int) -> tuple[QColor | None, list[str]]:
         """Farbe und Beschriftungszeilen fuer einen Tag.
 
-        Mit gewaehlter Person: deren Zustand. Ohne Auswahl: alle Helfer,
-        die an diesem Tag abwesend sind.
+        Eine gewaehlte Person: deren Zustand. Mehrere: alle gewaehlten
+        Helfer, die an diesem Tag abwesend sind (U/W vor dem Namen).
         """
         d = date(self.year, self.month, day)
-        person = self._selected_assistant()
-        if person is not None:
+        persons = self._selected_assistants()
+        if len(persons) == 1:
+            person = persons[0]
             if d in absence_days(person.constraints):
                 return self._vacation_color(), ["Urlaub"]
             if d in blocked_days(person.constraints):
-                return self._block_color(), ["Block"]
+                return self._block_color(), ["Wunsch"]
             return None, []
 
         lines, has_vacation, has_block = [], False, False
-        for assistant in self.plan.assistants:
+        for assistant in persons:
             if d in absence_days(assistant.constraints):
                 lines.append(f"U {assistant.name}")
                 has_vacation = True
             elif d in blocked_days(assistant.constraints):
-                lines.append(f"B {assistant.name}")
+                lines.append(f"W {assistant.name}")
                 has_block = True
         if not lines:
             return None, []
         if has_vacation and has_block:
-            color = MIXED_COLOR
+            # Urlaub und Wunsch gemischt: neutral
+            color = QColor(theme.colors().separator)
         else:
             color = self._vacation_color() if has_vacation else self._block_color()
         return color, lines
@@ -416,6 +504,7 @@ class AbsenceTab(QWidget):
         today = date.today()
         small = QFont()
         small.setPointSize(max(7, theme.FONT_PT - 2))
+        scheme = theme.colors()
 
         week_labels = []
         for week in range(weeks):
@@ -427,19 +516,24 @@ class AbsenceTab(QWidget):
                 )
                 if day < 1 or day > days_in_month:
                     item.setFlags(Qt.ItemFlag.NoItemFlags)
-                    item.setBackground(OUTSIDE_COLOR)
+                    item.setBackground(QColor(scheme.outside))
                 else:
                     color, lines = self._day_state(day)
                     holiday = holiday_name(self.year, self.month, day)
+                    note = (self.plan.notes.get(day) or "").strip()
                     item.setData(Qt.ItemDataRole.UserRole, day)
-                    item.setText("\n".join([str(day)] + lines))
+                    head = f"{day}  {theme.NOTE_ICON}" if note else str(day)
+                    item.setText("\n".join([head] + lines))
                     item.setFont(small)
                     if color is not None:
                         item.setBackground(color)
+                        item.setForeground(theme.text_on(color))
                     elif weekday >= 5 or holiday is not None:
                         # Feiertage grau wie Wochenenden (reine Anzeige)
-                        item.setBackground(theme.WEEKEND_COLOR)
+                        item.setBackground(QColor(scheme.weekend))
                     tooltip = [holiday] if holiday else []
+                    if note:
+                        tooltip.append(f"{theme.NOTE_ICON} {note}")
                     if date(self.year, self.month, day) == today:
                         bold = QFont(small)
                         bold.setBold(True)
@@ -465,7 +559,8 @@ class AbsenceTab(QWidget):
 
     def _all_absences(self) -> list[tuple]:
         """Alle Abwesenheiten aller Helfer als (start, end, assistant, kind),
-        chronologisch: Zeitraeume und Einzeltage, Urlaub und Block."""
+        chronologisch: Zeitraeume und Einzeltage, Urlaub und Wunsch
+        (kind "block")."""
         absences = []
         for assistant in self.plan.assistants:
             c = assistant.constraints
@@ -481,12 +576,15 @@ class AbsenceTab(QWidget):
         return absences
 
     def refresh_list(self):
-        """Liste: gefiltert nach Person, optional Monat und Vergangenes."""
+        """Liste: gefiltert auf die links gewaehlten Helfer, optional Monat
+        und Vergangenes. Ein gewaehlter Eintrag bleibt gewaehlt."""
         if not self.plan:
             return
+        current = self.absence_list.currentItem()
+        current_key = current.data(Qt.ItemDataRole.UserRole) if current else None
+        self.absence_list.blockSignals(True)
         self.absence_list.clear()
 
-        person_filter = self.person_combo.currentData()
         only_month = self.only_month_btn.isChecked()
         show_past = self.show_past_btn.isChecked()
         today = date.today()
@@ -496,7 +594,7 @@ class AbsenceTab(QWidget):
         )
 
         for start, end, assistant, kind in self._all_absences():
-            if person_filter is not None and assistant.id != person_filter:
+            if assistant.id not in self._selected_ids:
                 continue
             if only_month and (end < month_start or start > month_end):
                 continue
@@ -508,28 +606,28 @@ class AbsenceTab(QWidget):
             else:
                 text = "{:%d.%m.%Y} - {:%d.%m.%Y}   {}".format(start, end, assistant.name)
             if kind == "block":
-                text += "   [Block]"
+                text += "   [Wunsch]"
             item = QListWidgetItem(text)
-            item.setData(
-                Qt.ItemDataRole.UserRole,
-                (assistant.id, start.isoformat(), end.isoformat(), kind),
-            )
-            pixmap = QPixmap(12, 12)
-            pixmap.fill(QColor(assistant.color))
-            item.setIcon(pixmap)
+            key = (assistant.id, start.isoformat(), end.isoformat(), kind)
+            item.setData(Qt.ItemDataRole.UserRole, key)
             self.absence_list.addItem(item)
+            if key == current_key:
+                self.absence_list.setCurrentItem(item)
+        self.absence_list.blockSignals(False)
 
     def on_list_selection(self):
-        """Listenauswahl zeigt den passenden Monat im Kalender."""
+        """Eintrag in einem anderen Monat: alle Tabs wechseln dorthin."""
         item = self.absence_list.currentItem()
         if item is None:
             return
         _, start_iso, _, _ = item.data(Qt.ItemDataRole.UserRole)
         start = date.fromisoformat(start_iso)
         if (start.year, start.month) != (self.year, self.month):
-            self.year, self.month = start.year, start.month
-            self.month_selector.set_month(self.year, self.month)
-            self.refresh_calendar()
+            # Erst nach dem Signal wechseln: der Monatswechsel baut die
+            # Liste neu auf, waehrend Qt noch in ihrem Auswahl-Signal steckt
+            QTimer.singleShot(
+                0, lambda: self.month_change_requested.emit(start.year, start.month)
+            )
 
     # --- Anlegen / Bearbeiten / Entfernen -------------------------------
 
@@ -546,10 +644,11 @@ class AbsenceTab(QWidget):
         h0.addWidget(QLabel("Helfer:"))
         assistant_combo = QComboBox()
         for assistant in self.plan.assistants:
-            pixmap = QPixmap(12, 12)
-            pixmap.fill(QColor(assistant.color))
-            assistant_combo.addItem(pixmap, assistant.name, assistant.id)
-        preset = assistant_id if assistant_id is not None else self.person_combo.currentData()
+            assistant_combo.addItem(assistant.name, assistant.id)
+        selected = self._selected_assistants()
+        preset = assistant_id if assistant_id is not None else (
+            selected[0].id if len(selected) == 1 else None
+        )
         if preset is not None:
             index = assistant_combo.findData(preset)
             if index >= 0:
@@ -558,7 +657,7 @@ class AbsenceTab(QWidget):
         h0.addWidget(QLabel("Art:"))
         kind_combo = QComboBox()
         kind_combo.addItem("Urlaub", "urlaub")
-        kind_combo.addItem("Block", "block")
+        kind_combo.addItem("Wunsch", "block")
         index = kind_combo.findData(kind)
         if index >= 0:
             kind_combo.setCurrentIndex(index)

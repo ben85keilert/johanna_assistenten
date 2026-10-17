@@ -1,6 +1,8 @@
 from __future__ import annotations
 from dataclasses import dataclass
-from models import MonthPlan, ShiftType, DUTY_TYPES, is_duty, is_effective
+from models import (
+    MonthPlan, ShiftType, DUTY_TYPES, SHIFT_LABELS, is_duty, is_effective,
+)
 from .engine import (
     shift_weight, _day_needs, _needs_oncall, _works_on, ON_CALL_KINDS,
     is_blocked, is_on_vacation,
@@ -29,8 +31,7 @@ def validate(plan: MonthPlan) -> list[Warning]:
         if needed == ShiftType.FULL:
             unassigned.append(day)
         else:
-            label = "NM" if needed == ShiftType.HALF_AFTERNOON else "VM"
-            half_covered.append(f"{day}. ({label} fehlt)")
+            half_covered.append(f"{day}. ({SHIFT_LABELS[needed]} fehlt)")
 
     if unassigned:
         warnings.append(

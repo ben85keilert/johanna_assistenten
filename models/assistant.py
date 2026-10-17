@@ -8,8 +8,9 @@ class AssistantConstraints:
     assistant_id: str
     unavailable_dates: list[date] = field(default_factory=list)
     vacation_ranges: list[tuple[date, date]] = field(default_factory=list)
-    # Block-Zeiten: sperren wie Urlaub Dienst UND Rufbereitschaft,
-    # sind aber eine eigene Kategorie (kein Urlaub)
+    # Block-Zeiten (in der Oberflaeche "Wunsch" = Freiwuensche): sperren
+    # wie Urlaub Dienst UND Rufbereitschaft, sind aber eine eigene
+    # Kategorie (kein Urlaub); Feldnamen bleiben fuer das Dateiformat
     blocked_dates: list[date] = field(default_factory=list)
     blocked_ranges: list[tuple[date, date]] = field(default_factory=list)
     max_consecutive_days: int = 3

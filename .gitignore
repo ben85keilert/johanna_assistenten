@@ -14,3 +14,6 @@ build/
 # Sicherungs-/Zwischendateien des atomaren Speicherns
 *.bak
 *.tmp
+temp*
+# Automatische Datensicherungen (persistence/backup.py)
+data/sicherungen/

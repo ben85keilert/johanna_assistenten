@@ -21,16 +21,18 @@ Einsatz, Entwicklung unter Linux). Geplant wird von einer Person am Rechner.
 | Kürzel | Bedeutung | Abdeckung |
 |--------|-----------|-----------|
 | VOLL   | Tagesdienst (Regelfall) | deckt den ganzen Tag ab |
-| VM     | nur Vormittag (Ausnahme) | halber Tag |
-| NM     | nur Nachmittag (Ausnahme) | halber Tag |
+| Tag    | halber Dienst: nur die Tag-Hälfte (Ausnahme) | halber Tag |
+| Nacht  | halber Dienst: nur die Nacht-Hälfte (Ausnahme) | halber Tag |
 | RB     | Rufbereitschaft (immer ganztägig, kein halber Tag) | eigener Bedarf: 1 Person pro Tag |
 
 Ein Tag gilt als **abgedeckt**, wenn entweder eine Person VOLL übernimmt **oder**
-zwei Personen sich den Tag mit VM + NM teilen — **und** zusätzlich eine weitere
+zwei Personen sich den Tag mit Tag + Nacht teilen — **und** zusätzlich eine weitere
 Person die Rufbereitschaft hat. Pro Person und Tag gibt es **entweder Dienst oder
 Rufbereitschaft, nie beides**; die Rufbereitschaft übernimmt also nie die Person,
 die an dem Tag Dienst hat. Halbe Dienste zählen für die Verteilung als 0,5 Dienste.
 Rufbereitschaften zählen in einer **eigenen Zählung** und nie zu den Soll-Diensten.
+(Bis Version 0.3 hießen die halben Dienste „VM"/„NM" — Vormittag/Nachmittag; im
+Dateiformat heißen sie weiterhin `HALF_MORNING`/`HALF_AFTERNOON`.)
 
 ## Fairness-Regeln (Einschränkungen)
 
@@ -72,14 +74,15 @@ Jeder Helfer hat eigene Vorgaben:
 - **Urlaub** (nicht verfügbare Einzeltage und Urlaubszeiträume): an diesen Tagen
   wird die Person **nie** eingeplant — weder für Dienst noch für Rufbereitschaft.
   Urlaub ist **zwingend** und wird unter keinen Umständen überplant.
-- **Block (Freiwünsche)** (Sperrzeiten, z. B. andere Verpflichtungen oder
-  Wunsch-frei-Tage): wirken grundsätzlich wie Urlaub, sind aber **Wünsche, keine
-  Pflicht**. Je Helfer gibt es ein **Freiwunsch-Kontingent** („Freiwünsche",
-  einstellbar in den Team-Vorlagen; **„Alle"** = kein Kontingent, alle Blocks
-  sind hart wie Urlaub — das ist der Standard und das bisherige Verhalten).
-  Ist ein Kontingent gesetzt, gilt: Die **chronologisch ersten N Block-Tage
+- **Wunsch (Freiwünsche)** (früher „Block"; Tage, an denen jemand frei haben
+  möchte, z. B. andere Verpflichtungen): wirken grundsätzlich wie Urlaub, sind
+  aber **Wünsche, keine Pflicht**. Je Helfer gibt es ein
+  **Freiwunsch-Kontingent** („Freiwünsche", einstellbar in den Team-Vorlagen;
+  **„Alle"** = kein Kontingent, alle Wunsch-Tage sind hart wie Urlaub — das ist
+  der Standard und das bisherige Verhalten).
+  Ist ein Kontingent gesetzt, gilt: Die **chronologisch ersten N Wunsch-Tage
   des Monats haben Vorrang** und werden nie überplant; alle **weiteren
-  Block-Tage haben Nachrang** — sie werden normalerweise ebenfalls respektiert,
+  Wunsch-Tage haben Nachrang** — sie werden normalerweise ebenfalls respektiert,
   dürfen aber überplant werden, wenn ein Tag sonst unbesetzt bliebe (siehe
   Konflikt-Dialog unten). Helfer, die ihr Kontingent noch nicht ausgeschöpft
   haben, haben mit ihren Wünschen also Vorrang vor den Zusatz-Wünschen anderer.
@@ -103,24 +106,40 @@ Weitere Bedingungen (z. B. Wochenend-Fairness) folgen später und werden hier er
   reicht.
 - Änderungen sind sofort in allen Tabs sichtbar — nichts muss doppelt gepflegt
   werden.
+- **Farbschema** (damit das Programm angenehm aussieht): unter
+  **Einstellungen → Farbschema** stehen vier Paletten — **Ozean** (Blau),
+  **Salbei** (Grün), **Sand** (Terrakotta) und **Lavendel** (Violett) —, jede
+  als **helles und dunkles** Schema. Die Wahl gilt sofort und wird gemerkt.
+  Sie färbt die Oberfläche (Fenster, Tabellen, Reiter, Buttons,
+  Wochenend-Grau, Hinweistexte); die Farben der Eintragsarten bleiben davon
+  unabhängig unter **Einstellungen → Farben…** einstellbar. Im dunklen Schema
+  wählt das Raster die Schriftfarbe je Zelle automatisch passend (hell auf
+  dunkel). Der PDF-Export ist unabhängig vom Schema immer hell (Papier).
 
 ## Bedienkonzept
 
-Drei Tabs:
+Drei Tabs — mit **einem gemeinsamen Monat**: Jahr und Monat werden einmal
+oben rechts in der Tab-Zeile gewählt und gelten für alle Tabs gleichzeitig
+(Dienstplan, Urlaub und Notizen, „In Dienstplan … übernehmen" im Team-Tab).
+Wechselt man in einem Tab den Monat, gehen die anderen mit — so kann man
+nicht versehentlich im Oktober planen und dabei den September ansehen.
 
 1. **Dienstplan-Tab**: Monatsraster (Zeile = Helfer, Spalte = Tag).
+   - Die Gruppe **„Würfeln"** (Neu würfeln, Zurücksetzen, Seed,
+     Deterministisch) sitzt rechts in der Steuerleiste, direkt über der
+     Monats- und Ansichtswahl — so hat die Stempelzeile genug Platz.
    - **Zwei Ansichten** (umschaltbar, wird gemerkt): *Breit* (der ganze Monat in
      einer Zeile) oder *Zweigeteilt* (zweite Monatshälfte unter der ersten — man
      scrollt vertikal statt horizontal).
    - Neben dem Namen stehen pro Helfer die **Soll-Dienste als Max/Min-Spanne**
      (zwei Spalten mit Minus/Plus-Buttons, „Auto" = keine Grenze bzw. gleichmäßig
      verteilen; Min ≤ Max hält sich automatisch konsistent) und die **belegten
-     Dienste** als Tupel `VOLL | VM | NM | RB`.
+     Dienste** als Tupel `VOLL | Tag | Nacht | RB` (Spaltenkopf `V|T|N|RB`).
      **Max steht links, Min rechts daneben** — Max begrenzt Min, wird also zuerst
      eingestellt. Andersherum zöge ein danach gesetztes Max das gerade erhöhte
      Min wieder zurück. Dieselbe Reihenfolge gilt in den Vorlagen des Team-Tabs.
-   - **Stempel-Buttons**: Tagesdienst | VM | NM | Rufbereitschaft | Urlaub |
-     Block | Fixieren | Löschen.
+   - **Stempel-Buttons**: Tagesdienst | Tag | Nacht | Rufbereitschaft |
+     Urlaub | Wunsch | Notiz | Fixieren | Löschen.
      Ein aktiver Stempel wird per Klick auf eine Zelle angewendet; erneuter Klick
      auf denselben Stempeltyp entfernt ihn wieder. **Gestempelte Dienste sind
      automatisch fixiert** (Fixpunkte, mit Schloss). Einträge eines *anderen*
@@ -144,12 +163,15 @@ Drei Tabs:
      und zählen nicht als Abdeckung oder für die Soll-Dienste.
    - **Mehrfachauswahl**: mit Strg/Shift lassen sich mehrere Zellen (auch verstreut)
      markieren; das Rechtsklick-Menü wirkt dann auf alle markierten Zellen.
-   - **Urlaub und Block** im Raster: zusammenhängend gestempelte Tage werden
-     automatisch zu Zeiträumen zusammengefasst und erscheinen im Urlaub-Tab;
-     Einzeltage bleiben Einzeltage. Wird ein
+   - **Urlaub und Wunsch** im Raster: zusammenhängend gestempelte Tage werden
+     automatisch zu Zeiträumen zusammengefasst und erscheinen im Tab
+     „Urlaub und Notizen"; Einzeltage bleiben Einzeltage. Wird ein
      Tag mitten aus einem Zeitraum wieder entfernt, teilt sich der Zeitraum
-     entsprechend. Im Raster erscheint Urlaub als **„U"**, Block als **„X"**,
-     jeweils in der Farbe der Eintragsart (siehe Farbmanagement unten).
+     entsprechend. Im Raster erscheint Urlaub als **„U"**, ein Wunsch-Tag als
+     unaufgeregter Schrägstrich **„/"**, jeweils in der Farbe der Eintragsart
+     (siehe Farbmanagement unten). *Festgehaltene Alternative:* Wunsch-Tage
+     ganz ohne Zeichen, nur mit der Wunsch-Farbe — dafür genügt es,
+     `WISH_MARK` in `ui/theme.py` auf `""` zu setzen.
    - **Tagesnotizen**: Zu jedem Tag lässt sich eine Freitext-Notiz hinterlegen
      (Stempel **„Notiz"** + Klick auf eine Zelle des Tages, oder Rechtsklick →
      „Notiz für Tag … bearbeiten…"). Tage mit Notiz tragen im Tageskopf ein
@@ -160,35 +182,58 @@ Drei Tabs:
      Kandidaten zählen nicht als aktiv. Der Text erscheint als Tooltip auf dem Tageskopf
      und in einer **Notizzeile unter dem Raster**, sobald eine Zelle des Tages
      angeklickt ist. Der Dialog bearbeitet die Notiz mehrzeilig; leerer Text
-     löscht sie.
-   - Unter dem Raster: Zusammenfassung pro Helfer als Tupel `Name (VOLL|VM|NM|RB)`
+     löscht sie. Alle Notizen des Monats auf einen Blick gibt es im Reiter
+     **„Notizen"** des Tabs „Urlaub und Notizen" (siehe unten).
+   - Unter dem Raster: Zusammenfassung pro Helfer als Tupel `Name (VOLL|Tag|Nacht|RB)`
      mit Legende sowie Warnhinweise (unbesetzte/halbe Tage, Tage ohne
      Rufbereitschaft, Zielabweichungen, Abweichungen Rufbereitschaft/Dienste).
-2. **Urlaub-Tab**: alles rund um Abwesenheiten an einer Stelle — bewusst
-   übersichtlicher als das Dienstplan-Raster, weil es hier nur zwei Arten gibt.
-   In der Tab-Zeile: **Monat**, **Person** sowie die Listenfilter „Nur dieser
-   Monat" und „Vergangene anzeigen".
-   - **Links ein Monatskalender** in Wochenform (Spalten Mo–So, Zeilen =
-     Kalenderwochen). Ist oben eine Person gewählt, zeigt er deren Abwesenheiten
-     in den unter **Einstellungen → Farben…** gewählten Urlaub-/Block-Farben
-     (Standard: grün = Urlaub, rot = Block; die Legende unter dem Kalender
-     zeigt die aktuellen Farben), der heutige Tag ist fett. Bei „Alle Helfer"
-     stehen in jedem Tag die betroffenen Namen (`U`/`B` davor) — zum Einsehen,
-     wer wann weg ist.
-   - **Eintragen** wie im Dienstplan über Stempel: **Urlaub | Block | Löschen**.
-     Klick auf einen Tag setzt bzw. entfernt ihn wieder; Urlaub und Block
+2. **Tab „Urlaub und Notizen"**: alles rund um Abwesenheiten an einer Stelle —
+   bewusst übersichtlicher als das Dienstplan-Raster, weil es hier nur zwei
+   Arten gibt — und dazu alle Tagesnotizen des Monats.
+   - **Ganz links die Helfer-Buttons** — ein großer Button je Helfer und
+     **„Alle"**: Klick wählt genau diese Person, **Strg+Klick** nimmt weitere
+     dazu (oder wieder heraus), „Alle" wählt alle. Für die gewählten Helfer
+     wird angezeigt und eingetragen.
+   - **Daneben ein Monatskalender** in Wochenform (Spalten Mo–So, Zeilen =
+     Kalenderwochen). Bei einer gewählten Person zeigt er deren Abwesenheiten
+     in den unter **Einstellungen → Farben…** gewählten Urlaub-/Wunsch-Farben
+     (Standard: grün = Urlaub, hellbraun = Wunsch; die Legende unter dem
+     Kalender zeigt die aktuellen Farben), der heutige Tag ist fett. Bei
+     mehreren (oder allen) stehen in jedem Tag die betroffenen Namen (`U`/`W`
+     davor) — zum Einsehen, wer wann weg ist. Tage mit Notiz tragen das
+     Notizsymbol (📝).
+   - **Eintragen** wie im Dienstplan über Stempel: **Urlaub | Wunsch | Löschen**.
+     Klick auf einen Tag setzt bzw. entfernt ihn wieder; Urlaub und Wunsch
      schließen sich gegenseitig aus. Mehrere Tage lassen sich mit Strg/Shift
-     markieren und per Rechtsklick gemeinsam setzen oder räumen. Eingetragen wird
-     immer für die oben gewählte Person (bei „Alle Helfer" weist ein Hinweis
-     darauf hin).
-   - **Rechts die Abwesenheitsübersicht**: alle Abwesenheiten chronologisch —
-     Zeiträume **und Einzeltage**, Urlaub und Block (Block-Einträge mit
-     `[Block]` gekennzeichnet), monatsübergreifend. Hinzufügen, **Bearbeiten**
-     (Button oder Doppelklick) und Entfernen über Dialoge mit
-     Kalender-Datumsfeldern und Art-Auswahl; überlappende oder angrenzende
-     Zeiträume verschmelzen automatisch. Ein Klick auf einen Listeneintrag
-     springt im Kalender auf dessen Monat.
-3. **Team-Tab**: die Helferliste (anlegen/entfernen, Name und Farbe;
+     markieren und per Rechtsklick gemeinsam setzen oder räumen. Eingetragen
+     wird **für alle links gewählten Helfer** (bei mehreren erinnert ein
+     Hinweis daran): haben alle den Tag schon, entfernt ein Klick ihn bei
+     allen, sonst wird er bei allen gesetzt.
+   - **Rechts zwei Reiter** (bewusst schmaler als der Kalender).
+     **„Abwesenheiten"**: alle Abwesenheiten der gewählten Helfer
+     chronologisch — Zeiträume **und Einzeltage**, Urlaub und Wunsch
+     (Wunsch-Einträge mit `[Wunsch]` gekennzeichnet), monatsübergreifend;
+     darüber die Filter „Nur dieser Monat" und „Vergangene anzeigen".
+     Hinzufügen, **Bearbeiten** (Button oder Doppelklick) und Entfernen über
+     Dialoge mit Kalender-Datumsfeldern und Art-Auswahl; überlappende oder
+     angrenzende Zeiträume verschmelzen automatisch. Ein Klick auf einen
+     Listeneintrag in einem anderen Monat wechselt **alle Tabs** in diesen
+     Monat (der Eintrag bleibt gewählt).
+   - **„Notizen"** — das Notizen-Fenster, vor allem für die anderen im Team:
+     oben **alle Tage des Monats mit ihrer Notiz** (Wochenenden/Feiertage
+     grau, Tage mit Notiz fett mit 📝; „Nur Tage mit Notiz" blendet den Rest
+     aus). **Ein einfacher Klick in die Notiz-Spalte** bearbeitet die Notiz
+     direkt in der Tabelle (Enter übernimmt, Esc verwirft); mehrzeilige
+     Notizen stehen dort einzeilig mit `⏎` zwischen den Zeilen und bleiben
+     beim Bearbeiten mehrzeilig. Darunter der **Editor** für den gewählten
+     Tag — vor allem für mehrzeilige Notizen. Beide Wege gelten sofort,
+     leerer Text löscht die Notiz. Ein Klick auf einen Tag im Kalender wählt
+     ihn auch hier, ein **Doppelklick** springt direkt in den Editor. **Gesammelt ausgeben**: „Alle kopieren" legt alle Notizen samt
+     den an dem Tag Eingeteilten (`VOLL: Benno · RB: Doro`) in die
+     Zwischenablage (zum Weitergeben per Mail/Messenger), „Exportieren…"
+     (auch **Datei → Exportieren → Notizen (Text)**) speichert sie als
+     `notizen_JJJJ_MM.txt`; im PDF-Export stehen sie auf Seite 2.
+3. **Team-Tab**: die Helferliste (anlegen/entfernen, Name;
    **„▲ Hoch"/„▼ Runter" verschieben den gewählten Helfer in der
    Reihenfolge** — sie bestimmt die Zeilenreihenfolge im Dienstplan und in
    den Exporten und wird mitgespeichert) in
@@ -197,32 +242,40 @@ Drei Tabs:
    Min. Block, Abstand (Mindestabstand), Freiwünsche (Freiwunsch-Kontingent,
    „Alle" = kein Kontingent) und RB anhängen** — direkt in der
    Tabelle mit Minus/Plus-Buttons (Min./Max.-Paare halten sich automatisch
-   konsistent). Änderungen an einer Vorlage wirken **nicht sofort** auf den
-   Plan: erst der Button **„In Dienstplan … übernehmen"** überträgt die
+   konsistent). Die Tabellen sind etwas größer als sonst und **abwechselnd
+   im Ton des Farbschemas gestreift**. Änderungen an einer Vorlage wirken
+   **nicht sofort** auf den Plan: erst der kräftige Button **„Vorlage …
+   in Dienstplan <Monat> übernehmen"** (Akzentfarbe des Farbschemas, oben
+   in der Mitte auf Höhe von Hoch/Runter) überträgt die gerade gezeigte
    Vorlage in den aktuell geöffneten Monat. So lassen sich zwei verschiedene
    Konstellationen vorbereiten und je nach Monat in den Dienstplan migrieren;
-   jeder Monat merkt sich die übernommenen Einstellungen selbst. Name und
-   Farbe gelten dagegen immer sofort und in beiden Vorlagen. **Abwesenheiten
+   jeder Monat merkt sich die übernommenen Einstellungen selbst. Der Name
+   gilt dagegen immer sofort und in beiden Vorlagen. Helfer haben **keine
+   eigene Farbe** mehr in der Oberfläche (im Plan tragen die Eintragsarten
+   die Farbe). **Abwesenheiten
    gehören nicht hierher** — sie haben ihren eigenen Tab (siehe oben) und
    lassen sich zusätzlich direkt im Planraster stempeln.
 
 ### Generier-Zyklus: Fixieren und Neuwürfeln
 
 1. Man stempelt zuerst die **Fixpunkte** von Hand (z. B. „Martha kommt am 1.–2.
-   VOLL, am 3. nur VM"). Gestempelte Dienste sind automatisch fixiert und
+   VOLL, am 3. nur Tag"). Gestempelte Dienste sind automatisch fixiert und
    bleiben immer stehen.
 2. **Neu würfeln** füllt die restlichen Tage zufällig, unter Beachtung aller
    Regeln. Zufällig vergebene Dienste tragen einen **Punkt**.
 3. Was gefällt, **fixiert** man per Klick (Fixieren-Stempel oder Rechtsklick).
    **Farblogik (Farbmanagement): nicht die Helfer, sondern die Eintragsarten
-   tragen die Farbe** — VOLL, VM, NM, RB, Urlaub und Block haben je eine
+   tragen die Farbe** — VOLL, Tag, Nacht, RB, Urlaub und Wunsch haben je eine
    einheitliche, unter **Einstellungen → Farben…** einstellbare Farbe (mit
-   Vorschau und „Standardfarben"-Reset). **Feste Einträge (von Hand gesetzt
+   Vorschau und „Standardfarben"-Reset). Wunsch-Tage haben standardmäßig ein
+   ruhiges **Hellbraun** statt einer Signalfarbe — es ist ein Wunsch, kein
+   Alarm (wer noch das alte Standard-Rot eingestellt hatte, bekommt beim
+   Update automatisch das Hellbraun; selbst gewählte Farben bleiben). **Feste Einträge (von Hand gesetzt
    oder fixiert) sind kräftig/voll gefärbt; noch in Planung befindliche
    (gewürfelt, nicht fixiert) erscheinen transparenter** und tragen
-   zusätzlich einen Punkt, fixierte ein Schloss. Die Helferfarbe aus dem
-   Team-Tab dient weiter der Wiedererkennung in Listen, Auswahlfeldern und
-   Exporten. **Wochenenden und die gesetzlichen Feiertage in Bayern** (fest
+   zusätzlich einen Punkt, fixierte ein Schloss. (Die früher im Team-Tab
+   einstellbare Helferfarbe steht nur noch in den Daten und färbt allein
+   den Excel-Export.) **Wochenenden und die gesetzlichen Feiertage in Bayern** (fest
    hinterlegt, rechnerisch für jedes Jahr bestimmt, inkl. Mariä Himmelfahrt)
    sind im Planraster, im Urlaubs-Kalender und im PDF-Export **grau
    hinterlegt** — der Feiertagsname erscheint als Tooltip im Tageskopf.
@@ -234,8 +287,8 @@ Drei Tabs:
 4. Was nicht gefällt, bleibt unfixiert und wird beim nächsten Klick auf
    „Neu würfeln" **neu vergeben**. Schritte 3–4 wiederholt man, bis der Plan passt.
 
-Endet ein manuell gesetzter Block mit einem halben Tag (z. B. Tag 3 nur VM), vergibt
-der Generator die fehlende Tageshälfte (NM) an eine andere Person.
+Endet ein manuell gesetzter Block mit einem halben Tag (z. B. am 3. nur „Tag"),
+vergibt der Generator die fehlende Hälfte („Nacht") an eine andere Person.
 
 Nach der Dienstvergabe verteilt der Generator die **Rufbereitschaft**: bei
 Helfern mit „RB anhängen" wird der RB-Block schon zusammen mit dem Dienstblock
@@ -260,7 +313,7 @@ Wunsch-Überhang über ihrem Kontingent und den wenigsten Diensten — das ist d
 anderen überplanbaren Personen und **„Tag offen lassen"**. Bestätigen übernimmt
 die Auswahl; Abbrechen behält die Vorschläge (sie sind bereits ein gültiger
 Plan). **Urlaube sind zwingend, Wünsche nicht.** Ein überplanter Wunsch wird
-**nicht gelöscht**: der Block-Tag bleibt eingetragen und sichtbar, die Zelle
+**nicht gelöscht**: der Wunsch-Tag bleibt eingetragen und sichtbar, die Zelle
 trägt eine Warnmarkierung und unter dem Raster erscheint eine Warnung
 („Freiwunsch überplant").
 
@@ -303,7 +356,8 @@ Dafür sorgen vier Dinge:
 ### `data/team.json` — das Team (monatsübergreifend)
 
 Enthält neben Name/Farbe die **personenbezogenen Einschränkungen** (Urlaube
-und Einzeltage sowie Block-Zeiten — datumsbasiert, gelten in jedem berührten
+und Einzeltage sowie Wunsch-Tage, im Dateiformat `blocked_dates`/
+`blocked_ranges` — datumsbasiert, gelten in jedem berührten
 Monat, auch monatsübergreifend — Max. Folge, Min. Block, Mindestabstand,
 RB-Anhang) **und die zwei Einstellungs-Vorlagen** des Team-Tabs. Die im Repo
 versionierte Datei ist die feste **Beispielvorlage** (Team Anton, Benno,
@@ -342,8 +396,8 @@ Anton W., Carla, Doro, Emil, Fenja, Greta):
   (0 = aus).
 - `oncall_attach`: `"none"`, `"before"` oder `"after"` — Rufbereitschaft als
   Block direkt vor/nach dem Dienstblock.
-- `free_wish_quota`: Freiwunsch-Kontingent (`null` = „Alle": alle Blocks hart
-  wie bisher; Zahl = so viele Block-Tage je Monat haben Vorrang, weitere
+- `free_wish_quota`: Freiwunsch-Kontingent (`null` = „Alle": alle Wunsch-Tage
+  hart wie bisher; Zahl = so viele Wunsch-Tage je Monat haben Vorrang, weitere
   Nachrang).
 
 ### `data/plans/plan_JJJJ_MM.json` — ein Plan pro Monat
@@ -388,23 +442,33 @@ die übrigen Felder kommen dann weiterhin aus `team.json`.
 - `notes`: Freitext-Notiz je Tag (Tag → Text); leere Notizen werden nicht gespeichert.
 
 In den CSV-/Excel-/PDF-Exporten hat die Zusammenfassung eine eigene **RB**-Spalte;
-„Dienste gesamt" ist die gewichtete Dienstzahl (VOLL = 1, VM/NM = 0,5, ohne RB).
+„Dienste gesamt" ist die gewichtete Dienstzahl (VOLL = 1, Tag/Nacht = 0,5,
+ohne RB); die halben Dienste heißen in allen Exporten „Tag"/„Nacht".
 
-Der **PDF-Export** verwendet dieselbe Farblogik wie das Planraster: die
-Eintragsfarben aus **Einstellungen → Farben…** (fixierte Einträge kräftig,
-noch in Planung befindliche blass), „U"/„X" für Urlaub/Block, Grau für
-Wochenenden und Feiertage; nicht gewählte Kandidaten erscheinen nicht.
-Die Inhalte sind fest auf Seiten verteilt, damit keine Tabelle mitten
-umbricht: Seite 1 = erste Monatshälfte, Seite 2 = zweite Hälfte, Seite 3 =
-Zusammenfassung, Farb-Legende, die Tagesnotizen (Tage mit Notiz tragen im
-Tageskopf ein `*`) und die Feiertage des Monats. Hat eine Person an einem
-Tag Dienst **und** Rufbereitschaft, zeigt die Zelle beides (z. B. „VOLL/RB").
+Der **PDF-Export** (A4 **Hochformat**) ist der Aushang für das ganze Team:
+- **Seite 1** zeigt den ganzen Monat — **beide Monatshälften untereinander**
+  auf einer Seite (die Zeilenhöhe passt sich der Teamgröße an).
+- Er zeigt **nur Dienste und Rufbereitschaften** — keine Urlaube, keine
+  Wunsch-Tage und keine Hinweise auf überplante Wünsche: die anderen sollen
+  nicht sehen, wer wann Urlaub hat oder frei haben möchte.
+- Die Eintragsfarben aus **Einstellungen → Farben…**, **alle Einträge
+  einheitlich kräftig** — ob ein Eintrag schon fixiert oder noch gewürfelt
+  ist, spielt für den Aushang keine Rolle; Grau für Wochenenden und
+  Feiertage; nicht gewählte Kandidaten erscheinen nicht. Hat eine Person an einem Tag Dienst **und** Rufbereitschaft, zeigt
+  die Zelle beides (z. B. „VOLL/RB").
+- **Tagesnotizen sind deutlich markiert**: der Tageskopf ist gelb hinterlegt
+  und trägt „Notiz", die ganze Tagesspalte ist orange umrahmt, und in jeder
+  Zelle der an dem Tag Eingeteilten steht nochmals „Notiz" als gelbes
+  Schildchen (auf jeder Dienstfarbe lesbar).
+- **Seite 2**: die **Notizen** im Wortlaut (je Tag mit den Eingeteilten), die
+  **Zusammenfassung**, die angepasste **Legende** (nur Dienstarten, Grau,
+  Notiz-Markierung) und die Feiertage des Monats.
 
 ### `data/settings.json` — App-Zustand
 
 ```json
 {
-  "version": 4,
+  "version": 6,
   "last_year": 2026, "last_month": 8,
   "window_geometry": "…",
   "allow_overwrite": false,
@@ -413,13 +477,25 @@ Tag Dienst **und** Rufbereitschaft, zeigt die Zelle beides (z. B. „VOLL/RB").
   "entry_colors": {
     "FULL": "#5B9BD5", "HALF_MORNING": "#4DB6AC",
     "HALF_AFTERNOON": "#F2A54A", "ON_CALL": "#9575CD",
-    "VACATION": "#81C784", "BLOCK": "#E57373"
-  }
+    "VACATION": "#81C784", "BLOCK": "#C8A882"
+  },
+  "skipped_version": "",
+  "color_palette": "ozean",
+  "dark_mode": false,
+  "last_app_version": "0.3.1"
 }
 ```
 
 - `entry_colors`: die unter **Einstellungen → Farben…** gewählte Farbe je
   Eintragsart (fehlende Arten erhalten beim Laden die Standardfarbe).
+  `HALF_MORNING`/`HALF_AFTERNOON` sind die halben Dienste „Tag"/„Nacht",
+  `BLOCK` die Wunsch-Tage.
+- `last_app_version`: die zuletzt gelaufene Programmversion — weicht sie beim
+  Start ab, sichert das Programm zuerst den `data`-Ordner (siehe
+  Datensicherung unten).
+- `color_palette` / `dark_mode`: das unter **Einstellungen → Farbschema**
+  gewählte Erscheinungsbild (`ozean`, `salbei`, `sand`, `lavendel`; hell
+  oder dunkel).
 
 ## Updatefähigkeit & Migration
 
@@ -455,6 +531,34 @@ Die installierte Windows-Version hält sich selbst aktuell:
 - Die laufende Version steht im Fenstertitel (`version.py` ist die einzige
   Quelle der Versionsnummer; Release-Tag und `pyproject.toml` müssen dazu
   passen, der Build-Workflow prüft das).
+
+### Programm von Hand überschreiben
+
+Programm und Daten sind getrennt: der Programmordner enthält `JohannaAssistenten.exe`
+und `_internal\`, die Daten liegen daneben in `data\`. **Das Release-ZIP
+enthält keinen `data`-Ordner.** Eine neue Version lässt sich deshalb auch von
+Hand einspielen, ohne Pläne zu verlieren: Programm schließen, ZIP entpacken
+und den Inhalt des Ordners `JohannaAssistenten` über den bisherigen
+Programmordner kopieren („Dateien ersetzen"). Wichtig: den alten Ordner
+**nicht löschen** (sonst ist `data\` mit weg) und das Programm vorher
+beenden (eine laufende `.exe` lässt sich nicht ersetzen). Der automatische
+Updater macht genau das, räumt dabei zusätzlich alte Programmdateien weg und
+ist der bequemere Weg.
+
+### Datensicherung
+
+- **Automatisch bei jeder neuen Programmversion**: Startet eine andere
+  Version als beim letzten Mal (Update oder von Hand überschrieben), kopiert
+  das Programm **vor** dem ersten Speichern — also bevor Dateien ins neue
+  Format migriert werden — alle Datendateien nach
+  `data\sicherungen\<Datum_Uhrzeit>_v<alt>_vor_v<neu>\`; die Statuszeile
+  meldet das. Die letzten 10 Sicherungen bleiben erhalten.
+- **Von Hand**: **Datei → Datensicherung erstellen…** speichert den aktuellen
+  Stand und legt den ganzen `data`-Ordner als
+  `JohannaAssistenten-Daten_<Datum_Uhrzeit>.zip` an einen frei wählbaren Ort
+  (z. B. USB-Stick).
+- **Zurückholen**: Programm schließen und die Dateien aus der Sicherung (bzw.
+  den Ordner `data` aus dem ZIP) zurück in den Programmordner kopieren.
 
 ## Vertraulichkeit
 

@@ -2,7 +2,7 @@ from pathlib import Path
 from openpyxl import Workbook
 from openpyxl.styles import PatternFill, Alignment, Font, Border, Side
 from openpyxl.utils import get_column_letter
-from models import MonthPlan, ShiftType, is_effective
+from models import MonthPlan, ShiftType, SHIFT_LABELS, is_effective
 import calendar
 
 
@@ -51,15 +51,7 @@ def export_excel(plan: MonthPlan, folder: str | Path) -> str:
 
             cell = ws.cell(row, col)
             if matching:
-                entry = matching[0]
-                if entry.shift_type == ShiftType.FULL:
-                    cell.value = "VOLL"
-                elif entry.shift_type == ShiftType.HALF_MORNING:
-                    cell.value = "VM"
-                elif entry.shift_type == ShiftType.HALF_AFTERNOON:
-                    cell.value = "NM"
-                elif entry.shift_type == ShiftType.ON_CALL:
-                    cell.value = "RB"
+                cell.value = SHIFT_LABELS.get(matching[0].shift_type, "")
 
                 # Farbe
                 try:
@@ -86,8 +78,8 @@ def export_excel(plan: MonthPlan, folder: str | Path) -> str:
     summary_ws.cell(1, 1, "Assistent")
     summary_ws.cell(1, 2, "Dienste gesamt")
     summary_ws.cell(1, 3, "VOLL")
-    summary_ws.cell(1, 4, "VM")
-    summary_ws.cell(1, 5, "NM")
+    summary_ws.cell(1, 4, "Tag")
+    summary_ws.cell(1, 5, "Nacht")
     summary_ws.cell(1, 6, "RB")
 
     for row, assistant in enumerate(plan.assistants, 2):
@@ -110,7 +102,7 @@ def export_excel(plan: MonthPlan, folder: str | Path) -> str:
                     elif e.shift_type == ShiftType.ON_CALL:
                         rb_count += 1
 
-        # Gewichtete Dienstzahl (VOLL=1, VM/NM=0,5); RB zaehlt separat
+        # Gewichtete Dienstzahl (VOLL=1, Tag/Nacht=0,5); RB zaehlt separat
         summary_ws.cell(row, 2, full_count + 0.5 * (vm_count + nm_count))
         summary_ws.cell(row, 3, full_count)
         summary_ws.cell(row, 4, vm_count)

@@ -25,13 +25,21 @@ class AppSettings:
     # Geteilte Kalenderansicht: zweite Monatshaelfte unter der ersten
     split_view: bool = False
     # Farbe je Eintragsart (FULL/HALF_MORNING/HALF_AFTERNOON/ON_CALL/
-    # VACATION/BLOCK) als Hex-String; einstellbar unter Einstellungen > Farben
+    # VACATION/BLOCK = Tagesdienst/Tag/Nacht/RB/Urlaub/Wunsch) als
+    # Hex-String; einstellbar unter Einstellungen > Farben
     entry_colors: dict[str, str] = field(
         default_factory=lambda: dict(DEFAULT_ENTRY_COLORS)
     )
     # Release-Tag, den der Nutzer beim Start-Update-Hinweis uebersprungen
     # hat ("Diese Version ueberspringen"); der manuelle Check ignoriert das
     skipped_version: str = ""
+    # Farbschema der Oberflaeche (ui/theme.py: PALETTES) und hell/dunkel;
+    # gewaehlt unter Einstellungen > Farbschema
+    color_palette: str = "ozean"
+    dark_mode: bool = False
+    # Programmversion, die zuletzt lief - weicht sie ab, sichert das
+    # Programm beim Start zuerst den data-Ordner (persistence/backup.py)
+    last_app_version: str = ""
 
 
 def load_settings() -> AppSettings:
@@ -62,6 +70,9 @@ def load_settings() -> AppSettings:
             },
         },
         skipped_version=data.get("skipped_version", ""),
+        color_palette=data.get("color_palette", "ozean"),
+        dark_mode=data.get("dark_mode", False),
+        last_app_version=data.get("last_app_version", ""),
     )
 
 

@@ -14,6 +14,24 @@ class ShiftType(str, Enum):
 # Dienstarten des Tagesdienstes; Rufbereitschaft zaehlt separat
 DUTY_TYPES = (ShiftType.FULL, ShiftType.HALF_MORNING, ShiftType.HALF_AFTERNOON)
 
+# Kurzbezeichnung je Dienstart - einheitlich in Raster, Warnungen und
+# Exporten. Die halben Dienste heissen "Tag" und "Nacht"; die internen
+# Namen HALF_MORNING/HALF_AFTERNOON bleiben (Dateiformat unveraendert)
+SHIFT_LABELS = {
+    ShiftType.FULL: "VOLL",
+    ShiftType.HALF_MORNING: "Tag",
+    ShiftType.HALF_AFTERNOON: "Nacht",
+    ShiftType.ON_CALL: "RB",
+}
+
+# Ausfuehrliche Bezeichnung (Farben-Dialog, Legenden, Menues)
+SHIFT_NAMES = {
+    ShiftType.FULL: "Tagesdienst (VOLL)",
+    ShiftType.HALF_MORNING: "Tag (halber Dienst)",
+    ShiftType.HALF_AFTERNOON: "Nacht (halber Dienst)",
+    ShiftType.ON_CALL: "Rufbereitschaft (RB)",
+}
+
 
 def is_duty(shift_type: ShiftType) -> bool:
     return shift_type in DUTY_TYPES

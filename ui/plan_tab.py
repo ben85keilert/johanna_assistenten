@@ -8,7 +8,7 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QFont
 
 from models import (
-    MonthPlan, ShiftEntry, ShiftType, is_effective,
+    MonthPlan, ShiftEntry, ShiftType, SHIFT_LABELS, SHIFT_NAMES, is_effective,
     absence_days, set_absence_days, blocked_days, set_blocked_days,
     holiday_name,
 )
@@ -18,7 +18,6 @@ import calendar
 import math
 import random
 from . import theme
-from .widgets.month_selector import MonthSelector
 from .widgets.big_stepper import BigStepper
 from .cell_delegate import CellDelegate
 from .conflict_dialog import ConflictDialog
@@ -48,7 +47,7 @@ STAMP_SHIFTS = {
 }
 
 # Dienstarten mit Kandidaten-Mechanik: mehrere manuelle Vorschlaege je Tag,
-# aus denen gewaehlt wird (VM/NM bleiben Ausnahme-Dienste ohne Kandidaten)
+# aus denen gewaehlt wird (Tag/Nacht bleiben Ausnahme-Dienste ohne Kandidaten)
 CANDIDATE_TYPES = (ShiftType.FULL, ShiftType.ON_CALL)
 
 WEEKDAYS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
@@ -56,15 +55,16 @@ WEEKDAYS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
 # Feste Spalten vor den Tagesspalten: Soll Min + Soll Max + Belegt
 DAY_COL_OFFSET = 3
 
-# Hintergrund der grauen Kopf-Zeilen in der geteilten Ansicht
-SEPARATOR_BG = QColor(215, 215, 215)
+# Legende der Zaehl-Tupel unter dem Raster: VOLL|Tag|Nacht|RB
+COUNTS_LEGEND = "|".join(SHIFT_LABELS[t] for t in ShiftType)
 
 
 class PlanTab(QWidget):
     plan_modified = Signal()
     # Einschraenkungen (Soll-Dienste, Urlaube) geaendert -> Team-Tab aktualisieren
     constraints_changed = Signal()
-    month_change_requested = Signal(int, int)  # year, month
+    # Tagesnotiz per Dialog geaendert -> Notizen-Liste im Urlaub-Tab nachziehen
+    notes_changed = Signal()
 
     def __init__(self, settings: AppSettings, parent=None):
         super().__init__(parent)
@@ -79,16 +79,12 @@ class PlanTab(QWidget):
     def init_ui(self):
         layout = QVBoxLayout()
 
-        # Monatswahl + Ansichtsumschaltung: wird von MainWindow neben die
-        # Tab-Reiter gesetzt (Ecke der Tab-Leiste), nicht ins eigene Layout
+        # Ansichtsumschaltung: wird von MainWindow neben die Tab-Reiter
+        # gesetzt (Ecke der Tab-Leiste, rechts vom gemeinsamen
+        # Monatswaehler), nicht ins eigene Layout
         self.top_bar = QWidget()
         top_layout = QHBoxLayout()
         top_layout.setContentsMargins(0, 0, 8, 0)
-        self.month_selector = MonthSelector()
-        self.month_selector.layout().setContentsMargins(0, 0, 0, 0)
-        self.month_selector.month_changed.connect(self.month_change_requested.emit)
-        top_layout.addWidget(self.month_selector)
-
         top_layout.addWidget(QLabel("Ansicht:"))
         self.view_combo = QComboBox()
         self.view_combo.addItem("Breit (eine Zeile)", False)
@@ -98,7 +94,9 @@ class PlanTab(QWidget):
         top_layout.addWidget(self.view_combo)
         self.top_bar.setLayout(top_layout)
 
-        # Eine Werkzeugzeile: zwei umrandete Gruppen (Stempel | Wuerfeln)
+        # Werkzeugzeile mit den Stempeln; die Gruppe "Wuerfeln" sitzt nicht
+        # hier, sondern rechts in der Steuerleiste ueber der Monats-/
+        # Ansichtswahl (MainWindow holt sie ueber control_bar_widget)
         tools_layout = QHBoxLayout()
 
         stamp_box = QGroupBox("Stempel")
@@ -106,19 +104,31 @@ class PlanTab(QWidget):
         self.stamp_group = QButtonGroup(self)
         self.stamp_group.setExclusive(False)
         self.stamp_buttons = {}
-        for stamp, label in [
-            (STAMP_FULL, "Tagesdienst"),
-            (STAMP_VM, "VM"),
-            (STAMP_NM, "NM"),
-            (STAMP_ONCALL, "Rufbereitschaft"),
-            (STAMP_VACATION, "Urlaub"),
-            (STAMP_BLOCK, "Block"),
-            (STAMP_NOTE, "Notiz"),
-            (STAMP_LOCK, "Fixieren"),
-            (STAMP_DELETE, "Loeschen"),
+        for stamp, label, tip in [
+            (STAMP_FULL, "Tagesdienst",
+             "Ganzer Dienst (VOLL) - deckt den Tag allein ab."),
+            (STAMP_VM, "Tag",
+             "Halber Dienst: Tag-Haelfte (zaehlt 0,5). Zusammen mit "
+             "\"Nacht\" einer anderen Person ist der Tag abgedeckt."),
+            (STAMP_NM, "Nacht",
+             "Halber Dienst: Nacht-Haelfte (zaehlt 0,5). Zusammen mit "
+             "\"Tag\" einer anderen Person ist der Tag abgedeckt."),
+            (STAMP_ONCALL, "Rufbereitschaft",
+             "Rufbereitschaft (RB) - ganztaegig, eigene Zaehlung."),
+            (STAMP_VACATION, "Urlaub",
+             "Urlaub setzen/entfernen - wird nie ueberplant."),
+            (STAMP_BLOCK, "Wunsch",
+             "Freiwunsch setzen/entfernen: die Person moechte an dem Tag "
+             "frei haben (Kontingent \"Freiwuensche\" im Team-Tab)."),
+            (STAMP_NOTE, "Notiz",
+             "Tagesnotiz bearbeiten - alle Notizen auch im Tab "
+             "\"Urlaub und Notizen\"."),
+            (STAMP_LOCK, "Fixieren", "Eintrag fixieren bzw. loesen."),
+            (STAMP_DELETE, "Loeschen", "Eintrag entfernen."),
         ]:
             btn = QPushButton(label)
             btn.setCheckable(True)
+            btn.setToolTip(tip)
             btn.toggled.connect(
                 lambda checked, s=stamp: self.on_stamp_toggled(s, checked)
             )
@@ -177,7 +187,7 @@ class PlanTab(QWidget):
         self.deterministic_check.toggled.connect(self.on_deterministic_toggled)
         dice_layout.addWidget(self.deterministic_check)
         dice_box.setLayout(dice_layout)
-        tools_layout.addWidget(dice_box)
+        self.control_bar_widget = dice_box
 
         tools_layout.addStretch()
         layout.addLayout(tools_layout)
@@ -197,7 +207,7 @@ class PlanTab(QWidget):
         # Notizzeile: zeigt die Notiz des zuletzt angeklickten Tages
         self.note_label = QLabel()
         self.note_label.setWordWrap(True)
-        self.note_label.setStyleSheet("color: #555555;")
+        self.note_label.setProperty("role", "muted")
         layout.addWidget(self.note_label)
 
         # Zusammenfassung + Warnungen
@@ -205,7 +215,7 @@ class PlanTab(QWidget):
         layout.addWidget(self.summary_label)
         self.warnings_label = QLabel()
         self.warnings_label.setWordWrap(True)
-        self.warnings_label.setStyleSheet("color: #B05000;")
+        self.warnings_label.setProperty("role", "warning")
         layout.addWidget(self.warnings_label)
 
         self.setLayout(layout)
@@ -401,7 +411,7 @@ class PlanTab(QWidget):
                             other_set(assistant.constraints, other_days)
                     days.add(d)
                 # Zusammenhaengende Tage werden automatisch zu
-                # Zeitraeumen (Team-Tab) zusammengefasst
+                # Zeitraeumen (Urlaub-Tab) zusammengefasst
                 set_days(assistant.constraints, days)
                 changed = True
 
@@ -424,7 +434,6 @@ class PlanTab(QWidget):
 
     def set_plan(self, plan: MonthPlan):
         self.plan = plan
-        self.month_selector.set_month(plan.year, plan.month)
         self.rebuild_grid()
 
     def _note_text(self, day: int) -> str:
@@ -508,7 +517,7 @@ class PlanTab(QWidget):
         bold.setBold(True)
         for col in range(self.table.columnCount()):
             day = col - DAY_COL_OFFSET + first_day
-            item = self._make_inert_item(SEPARATOR_BG)
+            item = self._make_inert_item(QColor(theme.colors().separator))
             if col >= DAY_COL_OFFSET and day <= days_in_month:
                 item.setText(self._day_header(day).replace("\n", " "))
                 item.setFont(bold)
@@ -543,7 +552,7 @@ class PlanTab(QWidget):
         # Ansicht (geteilt uebernehmen das die grauen Kopf-Zeilen).
         # Max steht links von Min: Max begrenzt Min, also wird es zuerst
         # eingestellt (sonst zieht ein spaeter gesetztes Max das Min zurueck)
-        header_labels = ["Soll\nMax", "Soll\nMin", "Belegt\nV|VM|NM|RB"]
+        header_labels = ["Soll\nMax", "Soll\nMin", "Belegt\nV|T|N|RB"]
         for day in range(1, half + 1):
             header_labels.append("" if split else self._day_header(day))
         self.table.setHorizontalHeaderLabels(header_labels)
@@ -588,7 +597,9 @@ class PlanTab(QWidget):
                     if day <= days_in_month:
                         self.table.setItem(row, col, self._make_day_item(assistant.id, day))
                     else:
-                        self.table.setItem(row, col, self._make_inert_item(SEPARATOR_BG))
+                        self.table.setItem(row, col, self._make_inert_item(
+                            QColor(theme.colors().separator)
+                        ))
 
         header = self.table.horizontalHeader()
         header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
@@ -693,7 +704,7 @@ class PlanTab(QWidget):
         editor.setMinimumSize(360, 120)
         layout.addWidget(editor)
         hint = QLabel("Leer lassen und OK druecken loescht die Notiz.")
-        hint.setStyleSheet("color: #777777;")
+        hint.setProperty("role", "muted")
         layout.addWidget(hint)
 
         buttons = QHBoxLayout()
@@ -720,6 +731,7 @@ class PlanTab(QWidget):
             self.plan.notes.pop(day, None)
         self.refresh_display()
         self.plan_modified.emit()
+        self.notes_changed.emit()
 
     def update_summary(self):
         if not self.plan:
@@ -739,7 +751,7 @@ class PlanTab(QWidget):
             else:
                 target_text = ""
             summary_parts.append(f"{assistant.name} ({full}|{vm}|{nm}|{rb}){target_text}")
-        legend = "Legende: Name (VOLL|VM|NM|RB)"
+        legend = f"Legende: Name ({COUNTS_LEGEND})"
         self.summary_label.setText("   ".join(summary_parts) + "      " + legend)
 
         warnings = validate(self.plan)
@@ -851,15 +863,17 @@ class PlanTab(QWidget):
         menu = QMenu()
 
         shift_menu = menu.addMenu("Dienst setzen" + suffix)
-        shift_menu.addAction("Tagesdienst (VOLL)", lambda: self.apply_stamp(STAMP_FULL, cells))
-        shift_menu.addAction("VM (Vormittag)", lambda: self.apply_stamp(STAMP_VM, cells))
-        shift_menu.addAction("NM (Nachmittag)", lambda: self.apply_stamp(STAMP_NM, cells))
-        shift_menu.addAction("Rufbereitschaft (RB)", lambda: self.apply_stamp(STAMP_ONCALL, cells))
+        for stamp, shift_type in STAMP_SHIFTS.items():
+            shift_menu.addAction(
+                SHIFT_NAMES[shift_type],
+                # _checked faengt das bool von triggered ab
+                lambda _checked=False, s=stamp: self.apply_stamp(s, cells),
+            )
         menu.addAction("Loeschen" + suffix, lambda: self.apply_stamp(STAMP_DELETE, cells))
         menu.addSeparator()
         menu.addAction("Urlaub setzen/entfernen" + suffix,
                        lambda: self.apply_stamp(STAMP_VACATION, cells))
-        menu.addAction("Block setzen/entfernen" + suffix,
+        menu.addAction("Wunsch setzen/entfernen" + suffix,
                        lambda: self.apply_stamp(STAMP_BLOCK, cells))
         menu.addSeparator()
         menu.addAction("Fixieren" + suffix, lambda: self.set_locked(cells, True))

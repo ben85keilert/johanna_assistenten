@@ -14,6 +14,10 @@ class ControlBar(QFrame):
     Wert mit uebertrieben grossen Rauf/Runter-Buttons. Mit den Pfeil-Buttons
     links/rechts springt man zum vorherigen/naechsten Wertefeld des aktiven
     Tabs, ohne die kleinen Felder treffen zu muessen.
+
+    Rechts am Ende der Leiste koennen Tabs eigene Werkzeuggruppen anzeigen
+    (add_side_widget) - z. B. "Wuerfeln" des Dienstplans, direkt ueber der
+    Monats-/Ansichtswahl in der Tab-Zeile.
     """
 
     def __init__(self, targets_provider, parent=None):
@@ -22,7 +26,9 @@ class ControlBar(QFrame):
         self.targets_provider = targets_provider
         self._target: BigStepper | None = None
 
-        self.setFrameShape(QFrame.Shape.StyledPanel)
+        # Hintergrund/Rahmen kommen aus dem Farbschema (theme: #controlBar)
+        self.setObjectName("controlBar")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         layout = QHBoxLayout()
         layout.setContentsMargins(8, 4, 8, 4)
 
@@ -71,6 +77,13 @@ class ControlBar(QFrame):
 
         self.setLayout(layout)
         self._refresh()
+
+    def add_side_widget(self, widget: QWidget):
+        """Werkzeuggruppe rechts anhaengen; sichtbar schaltet MainWindow."""
+        self.layout().addWidget(widget)
+        # Hoehe der hoechsten Gruppe halten - sonst springt die Tab-Zeile
+        # beim Wechsel zu einem Tab ohne Gruppe
+        self.setMinimumHeight(max(self.minimumHeight(), self.sizeHint().height()))
 
     # --- Ziel-Verwaltung ---
 

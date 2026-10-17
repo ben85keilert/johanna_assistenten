@@ -8,17 +8,11 @@ from PySide6.QtGui import QPainter, QColor, QFont, QPen
 
 from PySide6.QtCore import QPoint
 
-from models import ShiftType, is_effective, holiday_name
+from models import ShiftType, SHIFT_LABELS, is_effective, holiday_name
 from scheduling.engine import is_on_vacation, is_blocked
 from persistence import AppSettings
 from . import theme
 
-SHIFT_LABELS = {
-    ShiftType.FULL: "VOLL",
-    ShiftType.HALF_MORNING: "VM",
-    ShiftType.HALF_AFTERNOON: "NM",
-    ShiftType.ON_CALL: "RB",
-}
 # Schluessel in AppSettings.entry_colors je Dienstart
 SHIFT_COLOR_KEYS = {
     ShiftType.FULL: "FULL",
@@ -35,11 +29,12 @@ CANDIDATE_ALPHA = 50
 class CellDelegate(QStyledItemDelegate):
     """Zeichnet die Planzellen direkt aus den Plandaten.
 
-    Farblogik: jede Eintragsart (VOLL/VM/NM/RB/Urlaub/Block) hat ihre eigene,
-    unter Einstellungen > Farben waehlbare Farbe. Feste Eintraege (von Hand
-    gesetzt oder fixiert) sind kraeftig gefaerbt; noch in Planung befindliche
-    (gewuerfelt, nicht fixiert) erscheinen transparent und tragen einen Punkt.
-    Fixierte tragen ein Schloss, Urlaub ein "U", Block ein "X"."""
+    Farblogik: jede Eintragsart (VOLL/Tag/Nacht/RB/Urlaub/Wunsch) hat ihre
+    eigene, unter Einstellungen > Farben waehlbare Farbe. Feste Eintraege (von
+    Hand gesetzt oder fixiert) sind kraeftig gefaerbt; noch in Planung
+    befindliche (gewuerfelt, nicht fixiert) erscheinen transparent und tragen
+    einen Punkt. Fixierte tragen ein Schloss, Urlaub ein "U", Wunsch-Tage
+    theme.WISH_MARK. Grundflaeche und Schriftfarbe folgen dem Farbschema."""
 
     def __init__(self, plan_provider, settings: AppSettings, parent=None):
         super().__init__(parent)
@@ -61,7 +56,7 @@ class CellDelegate(QStyledItemDelegate):
         assistant = next((a for a in plan.assistants if a.id == assistant_id), None)
         entries = plan.schedule.get(day, [])
         entry = next((e for e in entries if e.assistant_id == assistant_id), None)
-        # Urlaub hat Vorrang vor Block, falls beides gesetzt ist
+        # Urlaub hat Vorrang vor Wunsch, falls beides gesetzt ist
         vacation = assistant is not None and is_on_vacation(
             assistant, day, plan.year, plan.month
         )
@@ -88,21 +83,28 @@ class CellDelegate(QStyledItemDelegate):
             and (entry.generated or (entry.candidate and entry.chosen))
         )
 
-        # Grundflaeche (weiss bzw. Wochenend-Grau), darueber die Typfarbe:
-        # voll deckend bei festen Eintraegen, transparent bei gewuerfelten,
-        # sehr blass bei nicht gewaehlten Kandidaten
-        painter.fillRect(option.rect, theme.WEEKEND_COLOR if gray_day else QColor(255, 255, 255))
+        # Grundflaeche (Zellfarbe bzw. Wochenend-Grau des Farbschemas),
+        # darueber die Typfarbe: voll deckend bei festen Eintraegen,
+        # transparent bei gewuerfelten, sehr blass bei nicht gewaehlten
+        # Kandidaten. fill = sichtbare Mischfarbe, bestimmt die Schriftfarbe
+        scheme = theme.colors()
+        base = QColor(scheme.weekend if gray_day else scheme.surface)
+        painter.fillRect(option.rect, base)
+        fill = base
         if entry is not None:
             overlay = self._entry_color(SHIFT_COLOR_KEYS.get(entry.shift_type, ""))
-            if is_open_candidate:
-                overlay.setAlpha(CANDIDATE_ALPHA)
-            elif in_planning:
-                overlay.setAlpha(GENERATED_ALPHA)
+            alpha = (CANDIDATE_ALPHA if is_open_candidate
+                     else GENERATED_ALPHA if in_planning else 255)
+            fill = theme.blend(overlay, alpha, base)
+            overlay.setAlpha(alpha)
             painter.fillRect(option.rect, overlay)
         elif vacation:
-            painter.fillRect(option.rect, self._entry_color("VACATION"))
+            fill = self._entry_color("VACATION")
+            painter.fillRect(option.rect, fill)
         elif blocked:
-            painter.fillRect(option.rect, self._entry_color("BLOCK"))
+            fill = self._entry_color("BLOCK")
+            painter.fillRect(option.rect, fill)
+        text_color = theme.text_on(fill)
 
         # Nicht gewaehlter Kandidat: gestrichelter Rahmen in der Typfarbe
         if is_open_candidate:
@@ -123,23 +125,28 @@ class CellDelegate(QStyledItemDelegate):
         elif vacation:
             text = "U"
         elif blocked:
-            text = "X"
+            text = theme.WISH_MARK
         if text:
             font = QFont()
             font.setBold(entry is not None and not is_open_candidate)
             painter.setFont(font)
-            painter.setPen(QColor(60, 60, 60) if entry is None or is_open_candidate
-                           else QColor(0, 0, 0))
+            # Abwesenheiten und offene Kandidaten etwas zurueckhaltender
+            pen = QColor(text_color)
+            if entry is None or is_open_candidate:
+                pen.setAlpha(200)
+            painter.setPen(pen)
             painter.drawText(option.rect, Qt.AlignmentFlag.AlignCenter, text)
 
         # Punkt oben links: zufaellig vergeben/gewaehlt (noch nicht fixiert)
         if in_planning:
-            painter.setBrush(QColor(80, 80, 80))
+            dot = QColor(text_color)
+            dot.setAlpha(190)
+            painter.setBrush(dot)
             painter.setPen(Qt.PenStyle.NoPen)
             painter.drawEllipse(option.rect.left() + 4, option.rect.top() + 4, 6, 6)
 
-        # Ueberplanter Freiwunsch: wirksamer Eintrag auf eigenem Block-Tag
-        # -> kleines Warn-Dreieck unten rechts in der Block-Farbe
+        # Ueberplanter Freiwunsch: wirksamer Eintrag auf eigenem Wunsch-Tag
+        # -> kleines Warn-Dreieck unten rechts in der Wunsch-Farbe
         if entry is not None and is_effective(entry) and blocked:
             r = option.rect
             triangle = [
@@ -157,14 +164,14 @@ class CellDelegate(QStyledItemDelegate):
         if (entry is not None and is_effective(entry)
                 and (plan.notes.get(day) or "").strip()):
             note_rect = QRect(option.rect.left() + 2, option.rect.bottom() - 15, 14, 14)
-            painter.setPen(QColor(0, 0, 0))
+            painter.setPen(text_color)
             painter.setFont(QFont("", 8))
             painter.drawText(note_rect, Qt.AlignmentFlag.AlignCenter, theme.NOTE_ICON)
 
         # Schloss oben rechts: fixiert
         if entry is not None and entry.locked:
             lock_rect = QRect(option.rect.right() - 16, option.rect.top() + 2, 14, 14)
-            painter.setPen(QColor(0, 0, 0))
+            painter.setPen(text_color)
             painter.setFont(QFont("", 8))
             painter.drawText(lock_rect, Qt.AlignmentFlag.AlignCenter, "\U0001F512")
 
@@ -196,4 +203,8 @@ class CellDelegate(QStyledItemDelegate):
         return super().helpEvent(event, view, option, index)
 
     def sizeHint(self, option: QStyleOptionViewItem, index) -> QSize:
+        # Nur Tageszellen haben die feste Groesse; Textzellen wie die
+        # Belegt-Spalte ("4 | 0 | 0 | 4") brauchen ihre Textbreite
+        if not index.data(Qt.ItemDataRole.UserRole):
+            return super().sizeHint(option, index)
         return QSize(theme.DAY_COL_MIN_W, theme.ROW_HEIGHT)

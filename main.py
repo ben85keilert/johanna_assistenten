@@ -6,7 +6,7 @@ from PySide6.QtWidgets import (
     QApplication, QMessageBox, QFileDialog, QProgressDialog,
 )
 from PySide6.QtCore import QByteArray, QTimer, Qt
-from PySide6.QtGui import QAction
+from PySide6.QtGui import QAction, QActionGroup
 
 from version import __version__, GITHUB_REPO
 
@@ -15,12 +15,13 @@ from persistence import (
     save, load, save_team, load_team, save_plan, load_plan,
     load_profiles, load_settings, save_settings,
     DataFileError, backup_path, pop_recoveries,
+    backup_before_version_change, create_backup_zip,
 )
 from ui.main_window import MainWindow
 from ui.team_tab import TeamTab
 from ui.plan_tab import PlanTab
 from ui.absence_tab import AbsenceTab
-from ui.theme import apply_theme
+from ui import theme
 
 
 # Abstand zwischen zwei automatischen Sicherungen. Bewusst kurz: mehr als
@@ -31,9 +32,14 @@ AUTOSAVE_INTERVAL_MS = 15_000
 class JohannaApp:
     def __init__(self):
         self.app = QApplication(sys.argv)
-        apply_theme(self.app)
         self.settings = load_settings()
+        theme.apply_theme(
+            self.app, self.settings.color_palette, self.settings.dark_mode
+        )
         self.window = MainWindow()
+        # Neue Programmversion (z. B. Ordner ueberschrieben): Daten sichern,
+        # bevor sie im neuen Format gespeichert werden
+        self._backup_on_version_change()
         # Plan + die zwei monatsuebergreifenden Einstellungs-Vorlagen
         self.plan, self.profiles = self._auto_load()
         # Ein Speicherfehler (schreibgeschuetzter Ordner, volle Platte) wird
@@ -59,10 +65,17 @@ class JohannaApp:
         self.plan_tab.plan_modified.connect(self.window.mark_modified)
         self.plan_tab.constraints_changed.connect(self.team_tab.refresh_all)
         self.plan_tab.constraints_changed.connect(self.absence_tab.refresh_all)
-        self.plan_tab.month_change_requested.connect(self.change_month)
-        # Urlaub/Block im eigenen Tab -> Dienstplan neu zeichnen
+        # Ein Monat fuer alle Tabs: Monatswaehler in der Tab-Zeile
+        self.window.month_selector.month_changed.connect(self.change_month)
+        # Urlaub/Wunsch im eigenen Tab -> Dienstplan neu zeichnen
         self.absence_tab.absences_changed.connect(self.plan_tab.refresh_display)
         self.absence_tab.absences_changed.connect(self.window.mark_modified)
+        # Tagesnotizen: Notizen-Reiter und Dienstplan-Dialog halten sich synchron
+        self.absence_tab.notes_changed.connect(self.plan_tab.refresh_display)
+        self.absence_tab.notes_changed.connect(self.window.mark_modified)
+        self.plan_tab.notes_changed.connect(self.absence_tab.refresh_notes)
+        self.absence_tab.notes_export_requested.connect(self.export_notes)
+        self.absence_tab.month_change_requested.connect(self.change_month)
         self.window.on_close_request = self.handle_close_request
 
         self.load_plan_to_ui()
@@ -70,6 +83,25 @@ class JohannaApp:
         self._start_autosave()
         self._install_signal_handlers()
         self._report_recoveries()
+
+    def _backup_on_version_change(self):
+        if self.settings.last_app_version == __version__:
+            return
+        try:
+            target = backup_before_version_change(
+                self.settings.last_app_version, __version__
+            )
+        except Exception as e:
+            # Eine fehlgeschlagene Sicherung darf den Start nicht verhindern
+            print(f"Datensicherung beim Versionswechsel fehlgeschlagen: {e}",
+                  file=sys.stderr)
+        else:
+            if target is not None:
+                self.window.status_bar.showMessage(
+                    f"Neue Programmversion v{__version__}: Daten gesichert "
+                    f"unter {target}", 10000
+                )
+        self.settings.last_app_version = __version__
 
     def _auto_load(self) -> tuple[MonthPlan, list]:
         # Letzten Zustand wiederherstellen: zuletzt geoeffneter Monat,
@@ -145,11 +177,16 @@ class JohannaApp:
         save_as_action.triggered.connect(self.save_plan_as)
         file_menu.addAction(save_as_action)
 
+        backup_action = QAction("Datensicherung erstellen...", self.window)
+        backup_action.triggered.connect(self.create_data_backup)
+        file_menu.addAction(backup_action)
+
         export_menu = file_menu.addMenu("Exportieren")
         for label, handler in [
             ("CSV", self.export_csv),
             ("Excel", self.export_excel),
             ("PDF", self.export_pdf),
+            ("Notizen (Text)", self.export_notes),
         ]:
             action = QAction(label, self.window)
             action.triggered.connect(handler)
@@ -165,20 +202,63 @@ class JohannaApp:
         colors_action = QAction("Farben...", self.window)
         colors_action.triggered.connect(self.open_color_settings)
         settings_menu.addAction(colors_action)
+        self._setup_scheme_menu(settings_menu.addMenu("Farbschema"))
 
         update_action = QAction("Nach Updates suchen...", self.window)
         update_action.triggered.connect(self.check_updates_manual)
         settings_menu.addAction(update_action)
 
+    def _setup_scheme_menu(self, menu):
+        """Einstellungen > Farbschema: vier Paletten, je hell und dunkel."""
+        group = QActionGroup(self.window)
+        group.setExclusive(True)
+        for dark, heading in ((False, "Hell"), (True, "Dunkel")):
+            menu.addSection(heading)
+            for key, palette in theme.PALETTES.items():
+                scheme = palette.dark if dark else palette.light
+                action = QAction(theme.swatch_icon(scheme), palette.name, self.window)
+                action.setCheckable(True)
+                action.setChecked(
+                    key == self.settings.color_palette
+                    and dark == self.settings.dark_mode
+                )
+                action.triggered.connect(
+                    lambda _checked=False, k=key, d=dark: self.set_color_scheme(k, d)
+                )
+                group.addAction(action)
+                menu.addAction(action)
+
+    def set_color_scheme(self, palette: str, dark: bool):
+        """Farbschema sofort anwenden und dauerhaft merken."""
+        self.settings.color_palette = palette
+        self.settings.dark_mode = dark
+        theme.apply_theme(self.app, palette, dark)
+        # Fest eingefaerbte Tabellenzellen (Kopfzeilen, Kalender) neu aufbauen
+        self.plan_tab.rebuild_grid()
+        self.absence_tab.refresh_all()
+        try:
+            save_settings(self.settings)
+        except Exception as e:
+            self._report_save_error(e, "Speichern der Einstellungen")
+
     def load_plan_to_ui(self):
         self.team_tab.set_plan(self.plan)
         self.plan_tab.set_plan(self.plan)
         self.absence_tab.set_plan(self.plan)
+        self.window.month_selector.set_month(self.plan.year, self.plan.month)
         self.window.set_title_plan(self.plan.year, self.plan.month)
         self.window.mark_saved()
 
     def change_month(self, year: int, month: int):
-        """Monatswechsel: aktuellen Monat speichern, Zielmonat laden."""
+        """Monatswechsel fuer alle Tabs: aktuellen Monat speichern,
+        Zielmonat laden. Schlaegt etwas fehl, zeigt der Monatswaehler
+        wieder den weiter geoeffneten Monat."""
+        try:
+            self._change_month(year, month)
+        finally:
+            self.window.month_selector.set_month(self.plan.year, self.plan.month)
+
+    def _change_month(self, year: int, month: int):
         if (year, month) == (self.plan.year, self.plan.month):
             return
 
@@ -307,6 +387,28 @@ class JohannaApp:
             self._report_save_error(e, "Speichern unter", force_dialog=True)
             return
         self.window.status_bar.showMessage(f"Gespeichert unter: {path}")
+
+    def create_data_backup(self):
+        """Datei > Datensicherung erstellen: aktuellen Stand speichern und den
+        ganzen data-Ordner als ZIP an einen frei gewaehlten Ort legen."""
+        folder = QFileDialog.getExistingDirectory(
+            self.window, "Zielordner fuer die Datensicherung waehlen"
+        )
+        if not folder:
+            return
+        if not self._save_current_guarded(context="Speichern vor der Datensicherung"):
+            return
+        try:
+            path = create_backup_zip(folder)
+        except Exception as e:
+            self._report_save_error(e, "Datensicherung", force_dialog=True)
+            return
+        QMessageBox.information(
+            self.window, "Datensicherung",
+            f"Alle Daten (Team, Plaene, Einstellungen) gesichert:\n{path}\n\n"
+            "Zurueckholen: Programm schliessen und den Ordner \"data\" aus "
+            "dem ZIP in den Programmordner kopieren.",
+        )
 
     def open_color_settings(self):
         """Einstellungen > Farben: Farbe je Eintragsart aendern."""
@@ -488,6 +590,17 @@ class JohannaApp:
                 # Das PDF uebernimmt die Eintragsfarben aus den Einstellungen
                 f = export_pdf(self.plan, folder, self.settings)
                 QMessageBox.information(self.window, "Erfolg", f"PDF exportiert:\n{f}")
+            except Exception as e:
+                QMessageBox.critical(self.window, "Fehler", f"Export fehlgeschlagen:\n{e}")
+
+    def export_notes(self):
+        """Alle Tagesnotizen des Monats gesammelt als Textdatei."""
+        folder = QFileDialog.getExistingDirectory(self.window, "Zielordner waehlen")
+        if folder:
+            try:
+                from export.notes_exporter import export_notes
+                f = export_notes(self.plan, folder)
+                QMessageBox.information(self.window, "Erfolg", f"Notizen exportiert:\n{f}")
             except Exception as e:
                 QMessageBox.critical(self.window, "Fehler", f"Export fehlgeschlagen:\n{e}")
 

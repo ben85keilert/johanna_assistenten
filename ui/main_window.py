@@ -1,10 +1,12 @@
 from PySide6.QtWidgets import (
-    QMainWindow, QTabWidget, QStatusBar, QWidget, QVBoxLayout, QStackedWidget
+    QMainWindow, QTabWidget, QStatusBar, QWidget, QVBoxLayout, QHBoxLayout,
+    QStackedWidget,
 )
 from PySide6.QtCore import Qt
 
 from .control_bar import ControlBar
 from .widgets.big_stepper import BigStepper
+from .widgets.month_selector import MonthSelector
 from version import __version__
 
 
@@ -19,11 +21,25 @@ class MainWindow(QMainWindow):
 
         self.tab_widget = QTabWidget()
 
-        # Dynamische Leiste in der Tab-Zeile: zeigt je nach aktivem Tab
-        # dessen top_bar (Dienstplan: Jahr/Monat/Ansicht, Team: Urlaubsfilter)
+        # Leiste in der Tab-Zeile: links der EINE Monatswaehler fuer alle
+        # Tabs (Monatswechsel gilt ueberall gleichzeitig, main.py ->
+        # change_month), rechts davon die top_bar des aktiven Tabs
+        # (Dienstplan: Ansicht)
+        self.month_selector = MonthSelector()
+        self.month_selector.layout().setContentsMargins(0, 0, 8, 0)
         self._corner_stack = QStackedWidget()
         self._corner_pages = {}  # tab -> top_bar
-        self.tab_widget.setCornerWidget(self._corner_stack, Qt.Corner.TopRightCorner)
+        # Werkzeuggruppen einzelner Tabs rechts in der Steuerleiste
+        # (Dienstplan: "Wuerfeln"), nur sichtbar solange der Tab aktiv ist
+        self._control_bar_widgets = {}  # tab -> Widget
+        corner = QWidget()
+        corner_layout = QHBoxLayout()
+        corner_layout.setContentsMargins(0, 0, 0, 0)
+        corner_layout.setSpacing(0)
+        corner_layout.addWidget(self.month_selector)
+        corner_layout.addWidget(self._corner_stack)
+        corner.setLayout(corner_layout)
+        self.tab_widget.setCornerWidget(corner, Qt.Corner.TopRightCorner)
         self.tab_widget.currentChanged.connect(self._sync_corner_bar)
 
         # Zentrale Werte-Steuerleiste zwischen Menue und Tabs
@@ -74,12 +90,19 @@ class MainWindow(QMainWindow):
         page = getattr(tab, "top_bar", None) or QWidget()
         self._corner_pages[tab] = page
         self._corner_stack.addWidget(page)
+        extra = getattr(tab, "control_bar_widget", None)
+        if extra is not None:
+            self._control_bar_widgets[tab] = extra
+            self.control_bar.add_side_widget(extra)
         self._sync_corner_bar()
 
     def _sync_corner_bar(self, *_):
-        page = self._corner_pages.get(self.tab_widget.currentWidget())
+        current = self.tab_widget.currentWidget()
+        page = self._corner_pages.get(current)
         if page is not None:
             self._corner_stack.setCurrentWidget(page)
+        for tab, widget in self._control_bar_widgets.items():
+            widget.setVisible(tab is current)
 
     def set_plan_tab(self, tab):
         self.plan_tab = tab
@@ -89,7 +112,7 @@ class MainWindow(QMainWindow):
 
     def set_absence_tab(self, tab):
         self.absence_tab = tab
-        self.tab_widget.addTab(tab, "Urlaub")
+        self.tab_widget.addTab(tab, "Urlaub und Notizen")
         self._register_top_bar(tab)
 
     def set_team_tab(self, tab):

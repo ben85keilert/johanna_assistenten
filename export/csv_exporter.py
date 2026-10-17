@@ -1,6 +1,6 @@
 import csv
 from pathlib import Path
-from models import MonthPlan, ShiftType, is_effective
+from models import MonthPlan, ShiftType, SHIFT_LABELS, is_effective
 import calendar
 
 
@@ -30,17 +30,7 @@ def export_csv(plan: MonthPlan, folder: str | Path) -> tuple[str, str]:
                 matching = [e for e in entries
                             if e.assistant_id == assistant.id and is_effective(e)]
                 if matching:
-                    entry = matching[0]
-                    if entry.shift_type == ShiftType.FULL:
-                        row.append("VOLL")
-                    elif entry.shift_type == ShiftType.HALF_MORNING:
-                        row.append("VM")
-                    elif entry.shift_type == ShiftType.HALF_AFTERNOON:
-                        row.append("NM")
-                    elif entry.shift_type == ShiftType.ON_CALL:
-                        row.append("RB")
-                    else:
-                        row.append("")
+                    row.append(SHIFT_LABELS.get(matching[0].shift_type, ""))
                 else:
                     row.append("")
             writer.writerow(row)
@@ -48,7 +38,7 @@ def export_csv(plan: MonthPlan, folder: str | Path) -> tuple[str, str]:
     # Zusammenfassung
     with open(summary_file, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
-        writer.writerow(["Assistent", "Dienste gesamt", "VOLL", "VM", "NM", "RB"])
+        writer.writerow(["Assistent", "Dienste gesamt", "VOLL", "Tag", "Nacht", "RB"])
 
         for assistant in plan.assistants:
             full_count = 0
@@ -68,7 +58,7 @@ def export_csv(plan: MonthPlan, folder: str | Path) -> tuple[str, str]:
                         elif e.shift_type == ShiftType.ON_CALL:
                             rb_count += 1
 
-            # Gewichtete Dienstzahl (VOLL=1, VM/NM=0,5); RB zaehlt separat
+            # Gewichtete Dienstzahl (VOLL=1, Tag/Nacht=0,5); RB zaehlt separat
             total = full_count + 0.5 * (vm_count + nm_count)
             writer.writerow(
                 [assistant.name, f"{total:g}", full_count, vm_count, nm_count, rb_count]

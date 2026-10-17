@@ -15,7 +15,7 @@ Im Zweifel bleibt ein Tag unbesetzt und erscheint als Warnung:
 | Regel | Bedeutung |
 |---|---|
 | Urlaub | Person ist an dem Tag nie einplanbar (Dienst und RB) — **zwingend**, wird nie ueberplant |
-| Block mit **Vorrang** | Freiwunsch innerhalb des Kontingents (die chronologisch ersten N Block-Tage des Monats; ohne Kontingent alle) — hart wie Urlaub |
+| Wunsch-Tag mit **Vorrang** | Freiwunsch innerhalb des Kontingents (die chronologisch ersten N Wunsch-Tage des Monats; ohne Kontingent alle) — hart wie Urlaub |
 | Tages-Exklusivitaet | pro Person und Tag entweder Dienst **oder** RB, nie beides |
 | Max. Dienste (explizit gesetzt) | hartes Maximum, keine Toleranz |
 | Max. Tage am Stueck | je Dienstart getrennt gezaehlt (Dienst / RB) |
@@ -30,7 +30,7 @@ Im Zweifel bleibt ein Tag unbesetzt und erscheint als Warnung:
 | Min. Dienste | Verteilungsziel: Helfer unter ihrem Minimum kommen zuerst dran |
 | RB = Dienste (Gleichstand, ±0,5 bei halben Diensten) | wird zum Fuellen offener RB-Tage ueberschritten, danach Ausgleichsrunde |
 | Blockvergabe (`min_block_days` > 1) | Blockfahrer werden fuer einzelne Resttage nur als Notloesung herangezogen |
-| Block mit **Nachrang** (Freiwunsch ueber dem Kontingent) | wird normal respektiert, darf aber als **letzte Stufe** ueberplant werden, wenn ein Tag sonst offen bliebe — gemeldet als Konflikt (Dialog) |
+| Wunsch-Tag mit **Nachrang** (Freiwunsch ueber dem Kontingent) | wird normal respektiert, darf aber als **letzte Stufe** ueberplant werden, wenn ein Tag sonst offen bliebe — gemeldet als Konflikt (Dialog) |
 
 ## Ablauf eines „Neu wuerfeln" (Schritt fuer Schritt)
 
@@ -42,7 +42,7 @@ Eingabe: Plan mit manuellen + fixierten Eintraegen ("Fixpunkte")
    (Manuelles und Fixiertes bleibt stehen und zaehlt weiter mit.)
 
 2. ZAEHLEN
-   Je Helfer: bereits vergebene (gewichtete) Dienste (VOLL=1, VM/NM=0,5)
+   Je Helfer: bereits vergebene (gewichtete) Dienste (VOLL=1, Tag/Nacht=0,5)
    und Rufbereitschaften erfassen. Nicht gewaehlte Kandidaten zaehlen
    nirgends mit. "Auto"-Sollwert = Tage im Monat / aktive Helfer
    (+1,5 Toleranz); explizites Max ist hart.
@@ -64,7 +64,7 @@ Eingabe: Plan mit manuellen + fixierten Eintraegen ("Fixpunkte")
 
 4. RESTLICHE DIENST-TAGE (zufaellige Tagesreihenfolge)
    Fuer jeden nicht abgedeckten Tag (fehlt VOLL bzw. die zweite
-   Tageshaelfte VM/NM):
+   Haelfte Tag/Nacht):
    a) Kandidaten = Einzeltag-Helfer, die alle harten Regeln erfuellen
       und unter ihrer Soll-Grenze liegen.
    b) Leer? -> Blockfahrer als Notloesung dazunehmen.

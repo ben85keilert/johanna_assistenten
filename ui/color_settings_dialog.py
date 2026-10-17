@@ -11,34 +11,35 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtGui import QColor, QPixmap, QPainter
 
+from models import ShiftType, SHIFT_NAMES
 from persistence import AppSettings, DEFAULT_ENTRY_COLORS
+from . import theme
 from .widgets.color_button import ColorButton
 from .cell_delegate import GENERATED_ALPHA
 
 # Reihenfolge und Beschriftung der Eintragsarten im Dialog
 ENTRY_TYPES = [
-    ("FULL", "Tagesdienst (VOLL)"),
-    ("HALF_MORNING", "Vormittag (VM)"),
-    ("HALF_AFTERNOON", "Nachmittag (NM)"),
-    ("ON_CALL", "Rufbereitschaft (RB)"),
+    (shift_type.value, SHIFT_NAMES[shift_type]) for shift_type in ShiftType
+] + [
     ("VACATION", "Urlaub"),
-    ("BLOCK", "Block"),
+    ("BLOCK", "Wunsch (Freiwunsch)"),
 ]
 
 _PREVIEW_W, _PREVIEW_H = 96, 24
 
 
 def _preview_pixmap(color: str) -> QPixmap:
-    """Linke Haelfte: fest (voll deckend), rechte: in Planung (transparent)."""
+    """Linke Haelfte: fest (voll deckend), rechte: in Planung (transparent)
+    - auf der Zellfarbe des aktiven Farbschemas, wie im Raster."""
     pixmap = QPixmap(_PREVIEW_W, _PREVIEW_H)
-    pixmap.fill(QColor(255, 255, 255))
+    pixmap.fill(QColor(theme.colors().surface))
     painter = QPainter(pixmap)
     full = QColor(color)
     painter.fillRect(0, 0, _PREVIEW_W // 2, _PREVIEW_H, full)
     transparent = QColor(color)
     transparent.setAlpha(GENERATED_ALPHA)
     painter.fillRect(_PREVIEW_W // 2, 0, _PREVIEW_W // 2, _PREVIEW_H, transparent)
-    painter.setPen(QColor(150, 150, 150))
+    painter.setPen(QColor(theme.colors().border))
     painter.drawRect(0, 0, _PREVIEW_W - 1, _PREVIEW_H - 1)
     painter.end()
     return pixmap

@@ -10,18 +10,22 @@ import copy
 
 CURRENT_TEAM_VERSION = 6
 CURRENT_PLAN_VERSION = 7
-CURRENT_SETTINGS_VERSION = 5
+CURRENT_SETTINGS_VERSION = 6
 
 # Einheitliche Farben je Eintragsart (statt einer Farbe je Helfer).
 # Aenderbar unter Einstellungen > Farben; hier die Standardwerte.
 DEFAULT_ENTRY_COLORS = {
     "FULL": "#5B9BD5",            # Tagesdienst: Blau
-    "HALF_MORNING": "#4DB6AC",    # VM: Tuerkis
-    "HALF_AFTERNOON": "#F2A54A",  # NM: Orange
+    "HALF_MORNING": "#4DB6AC",    # Tag (halber Dienst): Tuerkis
+    "HALF_AFTERNOON": "#F2A54A",  # Nacht (halber Dienst): Orange
     "ON_CALL": "#9575CD",         # Rufbereitschaft: Violett
     "VACATION": "#81C784",        # Urlaub: Gruen
-    "BLOCK": "#E57373",           # Block: Rot
+    "BLOCK": "#C8A882",           # Wunsch (Freiwunsch): Hellbraun
 }
+
+# Bis Settings-Version 5 war Rot die Standardfarbe fuer Wunsch-Tage (damals
+# "Block") - zu sehr Signalfarbe fuer einen blossen Wunsch
+OLD_DEFAULT_BLOCK_COLOR = "#E57373"
 
 
 def migrate_team(data) -> dict:
@@ -209,6 +213,20 @@ def migrate_settings(data: dict) -> dict:
         # v4 -> v5: automatische Update-Pruefung - uebersprungene Version merken
         data.setdefault("skipped_version", "")
         version = 5
+
+    if version < 6:
+        # v5 -> v6: Farbschema (Palette + hell/dunkel) und zuletzt gelaufene
+        # Programmversion (Datensicherung bei Versionswechsel); "Block"
+        # heisst jetzt "Wunsch" und bekommt statt Rot ein ruhiges Hellbraun
+        # - nur wenn noch die alte Standardfarbe eingestellt ist
+        data.setdefault("color_palette", "ozean")
+        data.setdefault("dark_mode", False)
+        data.setdefault("last_app_version", "")
+        colors = data.get("entry_colors")
+        if (isinstance(colors, dict) and isinstance(colors.get("BLOCK"), str)
+                and colors["BLOCK"].upper() == OLD_DEFAULT_BLOCK_COLOR):
+            colors["BLOCK"] = DEFAULT_ENTRY_COLORS["BLOCK"]
+        version = 6
 
     data["version"] = CURRENT_SETTINGS_VERSION
     return data
