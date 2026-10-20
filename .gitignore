@@ -17,3 +17,5 @@ build/
 temp*
 # Automatische Datensicherungen (persistence/backup.py)
 data/sicherungen/
+# Ablageordner der Rueckmeldungen (Entwicklungsmodus; echte Daten)
+/Formularantworten/

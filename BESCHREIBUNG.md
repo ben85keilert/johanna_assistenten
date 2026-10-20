@@ -86,6 +86,29 @@ Jeder Helfer hat eigene Vorgaben:
   dürfen aber überplant werden, wenn ein Tag sonst unbesetzt bliebe (siehe
   Konflikt-Dialog unten). Helfer, die ihr Kontingent noch nicht ausgeschöpft
   haben, haben mit ihren Wünschen also Vorrang vor den Zusatz-Wünschen anderer.
+  **Alle Tage müssen besetzt sein** — deshalb gilt die Stufenfolge: erst wird
+  alles ohne Wunschverletzung gelöst; reicht das nicht, wird die Person
+  genommen, die ihr Kontingent überschritten hat (Nachrang, größter Überhang
+  zuerst, dann wenigste Dienste); reicht auch das nicht, wird als
+  **allerletzte Stufe ein Vorrang-Wunsch übergangen** (bevorzugt bei der Person
+  mit den wenigsten Diensten). Jede dieser Entscheidungen erscheint im
+  Konflikt-Dialog und lässt sich auf „Tag offen lassen" ändern. Urlaub wird
+  dabei nie angetastet.
+- **Dienstwunsch (Positivwünsche)**: Tage, an denen jemand **gern Dienst
+  machen möchte** — z. B. „3 Dienste an 7 möglichen Tagen". Je Helfer gibt es
+  ein **Dienstwunsch-Kontingent** („Dienstwünsche" in den Team-Vorlagen;
+  **„Alle"** = so viele der markierten Tage wie möglich, Zahl N = N Dienste auf
+  den markierten Tagen). Der Generator vergibt diese Dienste **vor** der
+  allgemeinen Füllung: bei mehreren Wünschen für denselben Tag kommt zuerst,
+  wer anteilig am wenigsten seiner Wünsche erfüllt hat, dann wer die wenigsten
+  Dienste hat; Blockfahrer bevorzugen Blöcke ganz auf Wunsch-Tagen. Es ist eine
+  **weiche Vorgabe**: alle harten Regeln (Urlaub, Max., Folgen, Abstand) und die
+  faire Verteilung gelten weiter, und ein Dienstwunsch nimmt nie einem anderen
+  Tag die Abdeckung — der Plan wird mit 8 Helfern genauso lückenlos wie ohne
+  Dienstwünsche. Ein Dienst auf einem Wunsch-Tag zählt als erfüllter Wunsch
+  (auch von Hand gestempelt); unter dem Raster erscheint ein Hinweis, wenn
+  weniger Wünsche erfüllt sind als gewünscht. Ein Tag ist je Person immer
+  nur **eine** Art: Urlaub, Wunsch (frei) oder Dienstwunsch.
 
 Weitere Bedingungen (z. B. Wochenend-Fairness) folgen später und werden hier ergänzt.
 
@@ -139,12 +162,17 @@ nicht versehentlich im Oktober planen und dabei den September ansehen.
      eingestellt. Andersherum zöge ein danach gesetztes Max das gerade erhöhte
      Min wieder zurück. Dieselbe Reihenfolge gilt in den Vorlagen des Team-Tabs.
    - **Stempel-Buttons**: Tagesdienst | Tag | Nacht | Rufbereitschaft |
-     Urlaub | Wunsch | Notiz | Fixieren | Löschen.
+     Urlaub | Wunsch | Dienstwunsch | Notiz | Fixieren | Löschen.
      Ein aktiver Stempel wird per Klick auf eine Zelle angewendet; erneuter Klick
      auf denselben Stempeltyp entfernt ihn wieder. **Gestempelte Dienste sind
      automatisch fixiert** (Fixpunkte, mit Schloss). Einträge eines *anderen*
      Typs bleiben unangetastet — außer die Checkbox **„Überschreiben"** ist
      bewusst eingeschaltet (Standard: aus), dann ersetzt der Stempel sie.
+     **Würfel-Vorschläge anderer Personen weichen** einem manuellen Dienst-
+     Stempel, wenn sie dieselbe Abdeckung liefern würden (z. B. ein gewürfelter
+     VOLL-Eintrag, wenn man selbst VOLL stempelt) — sonst wäre der Tag bis zum
+     nächsten Würfeln doppelt besetzt. Fixierte Vorschläge bleiben stehen; der
+     Validator meldet eine Doppelbesetzung.
      **Löschen** entfernt Stempel und Zufalls-Vorschläge per Klick.
    - **Kandidaten (mehrere Personen je Tag)**: Für **Tagesdienst (VOLL)** und
      **Rufbereitschaft** dürfen an einem Tag mehrere Personen eingetragen
@@ -163,15 +191,20 @@ nicht versehentlich im Oktober planen und dabei den September ansehen.
      und zählen nicht als Abdeckung oder für die Soll-Dienste.
    - **Mehrfachauswahl**: mit Strg/Shift lassen sich mehrere Zellen (auch verstreut)
      markieren; das Rechtsklick-Menü wirkt dann auf alle markierten Zellen.
-   - **Urlaub und Wunsch** im Raster: zusammenhängend gestempelte Tage werden
-     automatisch zu Zeiträumen zusammengefasst und erscheinen im Tab
+   - **Urlaub, Wunsch und Dienstwunsch** im Raster: zusammenhängend gestempelte
+     Tage werden automatisch zu Zeiträumen zusammengefasst und erscheinen im Tab
      „Urlaub und Notizen"; Einzeltage bleiben Einzeltage. Wird ein
      Tag mitten aus einem Zeitraum wieder entfernt, teilt sich der Zeitraum
      entsprechend. Im Raster erscheint Urlaub als **„U"**, ein Wunsch-Tag als
-     unaufgeregter Schrägstrich **„/"**, jeweils in der Farbe der Eintragsart
-     (siehe Farbmanagement unten). *Festgehaltene Alternative:* Wunsch-Tage
-     ganz ohne Zeichen, nur mit der Wunsch-Farbe — dafür genügt es,
-     `WISH_MARK` in `ui/theme.py` auf `""` zu setzen.
+     unaufgeregter Schrägstrich **„/"**, ein Dienstwunsch-Tag als **„+"**,
+     jeweils in der Farbe der Eintragsart (siehe Farbmanagement unten); liegt
+     ein Dienst auf einem Dienstwunsch-Tag (Wunsch erfüllt), steht das „+" klein
+     in der Zellecke. Urlaub und Wunsch vertragen sich nicht mit einem Dienst:
+     ein **Würfel-Vorschlag weicht** dem Stempel, ein fester Eintrag nur mit
+     „Überschreiben". Ein Dienstwunsch darf neben einem Eintrag stehen.
+     *Festgehaltene Alternative:* Wunsch-Tage ganz ohne Zeichen, nur mit der
+     Wunsch-Farbe — dafür genügt es, `WISH_MARK` in `ui/theme.py` auf `""` zu
+     setzen.
    - **Tagesnotizen**: Zu jedem Tag lässt sich eine Freitext-Notiz hinterlegen
      (Stempel **„Notiz"** + Klick auf eine Zelle des Tages, oder Rechtsklick →
      „Notiz für Tag … bearbeiten…"). Tage mit Notiz tragen im Tageskopf ein
@@ -186,34 +219,40 @@ nicht versehentlich im Oktober planen und dabei den September ansehen.
      **„Notizen"** des Tabs „Urlaub und Notizen" (siehe unten).
    - Unter dem Raster: Zusammenfassung pro Helfer als Tupel `Name (VOLL|Tag|Nacht|RB)`
      mit Legende sowie Warnhinweise (unbesetzte/halbe Tage, Tage ohne
-     Rufbereitschaft, Zielabweichungen, Abweichungen Rufbereitschaft/Dienste).
-2. **Tab „Urlaub und Notizen"**: alles rund um Abwesenheiten an einer Stelle —
-   bewusst übersichtlicher als das Dienstplan-Raster, weil es hier nur zwei
-   Arten gibt — und dazu alle Tagesnotizen des Monats.
+     Rufbereitschaft, **doppelt besetzte Tage**, Zielabweichungen, Abweichungen
+     Rufbereitschaft/Dienste, **überplanter Urlaub** oder Freiwunsch, nicht
+     erfüllte Dienstwünsche, Einträge eines nicht mehr vorhandenen Helfers).
+2. **Tab „Urlaub und Notizen"**: alles rund um Abwesenheiten und Wünsche an
+   einer Stelle — bewusst übersichtlicher als das Dienstplan-Raster, weil es
+   hier nur drei Arten gibt (Urlaub, Wunsch, Dienstwunsch) — und dazu alle
+   Tagesnotizen des Monats.
    - **Ganz links die Helfer-Buttons** — ein großer Button je Helfer und
      **„Alle"**: Klick wählt genau diese Person, **Strg+Klick** nimmt weitere
      dazu (oder wieder heraus), „Alle" wählt alle. Für die gewählten Helfer
      wird angezeigt und eingetragen.
    - **Daneben ein Monatskalender** in Wochenform (Spalten Mo–So, Zeilen =
-     Kalenderwochen). Bei einer gewählten Person zeigt er deren Abwesenheiten
-     in den unter **Einstellungen → Farben…** gewählten Urlaub-/Wunsch-Farben
-     (Standard: grün = Urlaub, hellbraun = Wunsch; die Legende unter dem
-     Kalender zeigt die aktuellen Farben), der heutige Tag ist fett. Bei
-     mehreren (oder allen) stehen in jedem Tag die betroffenen Namen (`U`/`W`
-     davor) — zum Einsehen, wer wann weg ist. Tage mit Notiz tragen das
-     Notizsymbol (📝).
-   - **Eintragen** wie im Dienstplan über Stempel: **Urlaub | Wunsch | Löschen**.
-     Klick auf einen Tag setzt bzw. entfernt ihn wieder; Urlaub und Wunsch
-     schließen sich gegenseitig aus. Mehrere Tage lassen sich mit Strg/Shift
+     Kalenderwochen). Bei einer gewählten Person zeigt er deren Einträge
+     in den unter **Einstellungen → Farben…** gewählten Farben
+     (Standard: grün = Urlaub, hellbraun = Wunsch, hellgelb = Dienstwunsch; die
+     Legende unter dem Kalender zeigt die aktuellen Farben), der heutige Tag ist
+     fett. Bei mehreren (oder allen) stehen in jedem Tag die betroffenen Namen
+     (`U`/`W`/`D` davor) — zum Einsehen, wer wann weg ist oder arbeiten möchte.
+     Tage mit Notiz tragen das Notizsymbol (📝).
+   - **Eintragen** wie im Dienstplan über Stempel: **Urlaub | Wunsch |
+     Dienstwunsch | Löschen**. Klick auf einen Tag setzt bzw. entfernt ihn
+     wieder; die drei Arten schließen sich gegenseitig aus (auch im
+     Hinzufügen/Bearbeiten-Dialog). Mehrere Tage lassen sich mit Strg/Shift
      markieren und per Rechtsklick gemeinsam setzen oder räumen. Eingetragen
      wird **für alle links gewählten Helfer** (bei mehreren erinnert ein
      Hinweis daran): haben alle den Tag schon, entfernt ein Klick ihn bei
      allen, sonst wird er bei allen gesetzt.
    - **Rechts zwei Reiter** (bewusst schmaler als der Kalender).
-     **„Abwesenheiten"**: alle Abwesenheiten der gewählten Helfer
-     chronologisch — Zeiträume **und Einzeltage**, Urlaub und Wunsch
-     (Wunsch-Einträge mit `[Wunsch]` gekennzeichnet), monatsübergreifend;
-     darüber die Filter „Nur dieser Monat" und „Vergangene anzeigen".
+     **„Abwesenheiten/Wünsche"**: alle Einträge der gewählten Helfer
+     chronologisch — Zeiträume **und Einzeltage**, Urlaub, Wunsch und
+     Dienstwunsch (mit `[Wunsch]` bzw. `[Dienstwunsch]` gekennzeichnet),
+     monatsübergreifend; darüber die Filter „Nur dieser Monat" und „Vergangene
+     anzeigen" (Einträge des angezeigten Monats sind immer zu sehen, auch wenn
+     er schon vorbei ist).
      Hinzufügen, **Bearbeiten** (Button oder Doppelklick) und Entfernen über
      Dialoge mit Kalender-Datumsfeldern und Art-Auswahl; überlappende oder
      angrenzende Zeiträume verschmelzen automatisch. Ein Klick auf einen
@@ -233,14 +272,17 @@ nicht versehentlich im Oktober planen und dabei den September ansehen.
      Zwischenablage (zum Weitergeben per Mail/Messenger), „Exportieren…"
      (auch **Datei → Exportieren → Notizen (Text)**) speichert sie als
      `notizen_JJJJ_MM.txt`; im PDF-Export stehen sie auf Seite 2.
-3. **Team-Tab**: die Helferliste (anlegen/entfernen, Name;
+3. **Team-Tab**: die Helferliste (anlegen/entfernen — Entfernen fragt nach und
+   löscht auch die Dienstplan-Einträge der Person, Einträge in anderen Monaten
+   werden beim nächsten Öffnen verworfen; Name;
    **„▲ Hoch"/„▼ Runter" verschieben den gewählten Helfer in der
    Reihenfolge** — sie bestimmt die Zeilenreihenfolge im Dienstplan und in
    den Exporten und wird mitgespeichert) in
    **zwei Vorlagen-Tabs** („Vorlage 1"/„Vorlage 2"): jede Vorlage hält einen
    kompletten Satz Einstellungen je Helfer — **Min./Max. Dienste, Max. Folge,
    Min. Block, Abstand (Mindestabstand), Freiwünsche (Freiwunsch-Kontingent,
-   „Alle" = kein Kontingent) und RB anhängen** — direkt in der
+   „Alle" = kein Kontingent), Dienstwünsche (Dienstwunsch-Kontingent, „Alle" =
+   so viele Wunsch-Tage wie möglich) und RB anhängen** — direkt in der
    Tabelle mit Minus/Plus-Buttons (Min./Max.-Paare halten sich automatisch
    konsistent). Die Tabellen sind etwas größer als sonst und **abwechselnd
    im Ton des Farbschemas gestreift**. Änderungen an einer Vorlage wirken
@@ -265,10 +307,11 @@ nicht versehentlich im Oktober planen und dabei den September ansehen.
    Regeln. Zufällig vergebene Dienste tragen einen **Punkt**.
 3. Was gefällt, **fixiert** man per Klick (Fixieren-Stempel oder Rechtsklick).
    **Farblogik (Farbmanagement): nicht die Helfer, sondern die Eintragsarten
-   tragen die Farbe** — VOLL, Tag, Nacht, RB, Urlaub und Wunsch haben je eine
-   einheitliche, unter **Einstellungen → Farben…** einstellbare Farbe (mit
-   Vorschau und „Standardfarben"-Reset). Wunsch-Tage haben standardmäßig ein
-   ruhiges **Hellbraun** statt einer Signalfarbe — es ist ein Wunsch, kein
+   tragen die Farbe** — VOLL, Tag, Nacht, RB, Urlaub, Wunsch und Dienstwunsch
+   haben je eine einheitliche, unter **Einstellungen → Farben…** einstellbare
+   Farbe (mit Vorschau und „Standardfarben"-Reset). Wunsch-Tage haben
+   standardmäßig ein ruhiges **Hellbraun** statt einer Signalfarbe,
+   Dienstwunsch-Tage ein **Hellgelb** — es ist ein Wunsch, kein
    Alarm (wer noch das alte Standard-Rot eingestellt hatte, bekommt beim
    Update automatisch das Hellbraun; selbst gewählte Farben bleiben). **Feste Einträge (von Hand gesetzt
    oder fixiert) sind kräftig/voll gefärbt; noch in Planung befindliche
@@ -303,16 +346,22 @@ als Warnung unter dem Raster — das ist gewollt, nicht kaputt.
 ### Konflikt-Dialog: wenn Wünsche nicht erfüllbar sind
 
 Bleibt ein Tag nach allen Regeln unbesetzt, versucht der Generator als letzte
-Stufe, einen **Nachrang-Freiwunsch zu überplanen** (nie einen Urlaub, nie einen
-Vorrang-Wunsch, nie eine harte Grenze wie Max. Dienste oder Mindestabstand):
-Der Tag wird **trotzdem belegt**, bevorzugt bei der Person mit dem größten
-Wunsch-Überhang über ihrem Kontingent und den wenigsten Diensten — das ist der
+Stufe, einen **Freiwunsch zu überplanen** (nie einen Urlaub, nie eine harte
+Grenze wie Max. Dienste oder Mindestabstand) — erst einen **Nachrang-Wunsch**
+(über dem Kontingent; bevorzugt bei der Person mit dem größten Wunsch-Überhang
+und den wenigsten Diensten), und nur wenn es keinen gibt, einen
+**Vorrang-Wunsch** (innerhalb des Kontingents; bevorzugt bei der Person mit den
+wenigsten Diensten). Der Tag wird **trotzdem belegt** — das ist der
 **vernünftige Vorschlag**, der am Ende immer steht. Nach dem Würfeln zeigt ein
 **Konflikt-Dialog** alle solchen Entscheidungen: je Konflikt der Tag, die Art
 (Dienst/Rufbereitschaft) und eine Auswahl mit dem Vorschlag vorausgewählt,
-anderen überplanbaren Personen und **„Tag offen lassen"**. Bestätigen übernimmt
-die Auswahl; Abbrechen behält die Vorschläge (sie sind bereits ein gültiger
-Plan). **Urlaube sind zwingend, Wünsche nicht.** Ein überplanter Wunsch wird
+anderen überplanbaren Personen (Nachrang vor Vorrang, jeweils gekennzeichnet)
+und **„Tag offen lassen"**. Bestätigen übernimmt die Auswahl; Abbrechen behält
+die Vorschläge (sie sind bereits ein gültiger Plan). Weicht die Wahl ab, wird
+mit demselben Seed neu gewürfelt; weil der Zufall ab der Abweichung anders
+läuft, können dabei **neue Konflikte** entstehen — die zeigt der Dialog erneut,
+bis alles bestätigt ist. **Urlaube sind zwingend, Wünsche nicht.** Ein
+überplanter Wunsch wird
 **nicht gelöscht**: der Wunsch-Tag bleibt eingetragen und sichtbar, die Zelle
 trägt eine Warnmarkierung und unter dem Raster erscheint eine Warnung
 („Freiwunsch überplant").
@@ -356,16 +405,17 @@ Dafür sorgen vier Dinge:
 ### `data/team.json` — das Team (monatsübergreifend)
 
 Enthält neben Name/Farbe die **personenbezogenen Einschränkungen** (Urlaube
-und Einzeltage sowie Wunsch-Tage, im Dateiformat `blocked_dates`/
-`blocked_ranges` — datumsbasiert, gelten in jedem berührten
-Monat, auch monatsübergreifend — Max. Folge, Min. Block, Mindestabstand,
-RB-Anhang) **und die zwei Einstellungs-Vorlagen** des Team-Tabs. Die im Repo
+und Einzeltage, Wunsch-Tage im Dateiformat `blocked_dates`/`blocked_ranges`
+sowie Dienstwunsch-Tage `wish_dates`/`wish_ranges` — datumsbasiert, gelten in
+jedem berührten Monat, auch monatsübergreifend — Max. Folge, Min. Block,
+Mindestabstand, RB-Anhang, Kontingente) **und die zwei Einstellungs-Vorlagen**
+des Team-Tabs. Die im Repo
 versionierte Datei ist die feste **Beispielvorlage** (Team Anton, Benno,
 Anton W., Carla, Doro, Emil, Fenja, Greta):
 
 ```json
 {
-  "version": 6,
+  "version": 8,
   "assistants": [
     { "id": "8cdf0de4", "name": "Benno", "color": "#00aa00", "active": true,
       "constraints": {
@@ -374,11 +424,16 @@ Anton W., Carla, Doro, Emil, Fenja, Greta):
         "vacation_ranges": [],
         "blocked_dates": [],
         "blocked_ranges": [],
+        "wish_dates": [],
+        "wish_ranges": [],
         "max_consecutive_days": 4,
         "min_block_days": 3,
         "min_gap_days": 0,
         "oncall_attach": "none",
-        "free_wish_quota": null } }
+        "free_wish_quota": null,
+        "work_wish_quota": null,
+        "feedback_log": { "2026-11": { "stand": "2026-10-20T14:03:05",
+                                       "eingelesen": "2026-10-20T15:10:42" } } } }
   ],
   "profiles": [
     { "name": "Vorlage 1",
@@ -386,7 +441,7 @@ Anton W., Carla, Doro, Emil, Fenja, Greta):
         "8cdf0de4": { "min_shifts": null, "max_shifts": null,
                       "max_consecutive_days": 4, "min_block_days": 3,
                       "min_gap_days": 0, "oncall_attach": "none",
-                      "free_wish_quota": null } } },
+                      "free_wish_quota": null, "work_wish_quota": null } } },
     { "name": "Vorlage 2", "settings": { "…": {} } }
   ]
 }
@@ -399,6 +454,13 @@ Anton W., Carla, Doro, Emil, Fenja, Greta):
 - `free_wish_quota`: Freiwunsch-Kontingent (`null` = „Alle": alle Wunsch-Tage
   hart wie bisher; Zahl = so viele Wunsch-Tage je Monat haben Vorrang, weitere
   Nachrang).
+- `wish_dates`/`wish_ranges`: Dienstwunsch-Tage (Positivwünsche), Einzeltage
+  und Zeiträume wie bei Urlaub.
+- `feedback_log`: je Monat (`"2026-11"`) der Zeitstempel der zuletzt
+  eingelesenen Rückmeldung (`stand`) und der Importzeitpunkt (`eingelesen`).
+- `work_wish_quota`: Dienstwunsch-Kontingent (`null` = „Alle": so viele
+  Wunsch-Tage wie möglich; Zahl = so viele Dienste je Monat sollen auf
+  Wunsch-Tage fallen).
 
 ### `data/plans/plan_JJJJ_MM.json` — ein Plan pro Monat
 
@@ -408,7 +470,7 @@ Vorlage) für diesen Monat übernommen wurde:
 
 ```json
 {
-  "version": 7,
+  "version": 9,
   "year": 2026,
   "month": 9,
   "schedule": {
@@ -423,7 +485,8 @@ Vorlage) für diesen Monat übernommen wurde:
   "settings": {
     "f6164e36": { "min": 3, "max": 6, "max_consecutive_days": 1,
                   "min_block_days": 1, "min_gap_days": 0,
-                  "oncall_attach": "none", "free_wish_quota": null }
+                  "oncall_attach": "none", "free_wish_quota": null,
+                  "work_wish_quota": null }
   },
   "seed": 42,
   "created_at": "…", "modified_at": "…"
@@ -440,6 +503,88 @@ die übrigen Felder kommen dann weiterhin aus `team.json`.
   mehreren Vorschlägen für den Tag (zählt nicht als Abdeckung/Soll, solange
   nicht gewählt), `chosen` die getroffene Wahl (vom Würfeln oder von Hand).
 - `notes`: Freitext-Notiz je Tag (Tag → Text); leere Notizen werden nicht gespeichert.
+- Einträge von Helfern, die es im Team nicht mehr gibt, werden beim Laden
+  verworfen — sie würden sonst unsichtbar als Abdeckung zählen.
+
+### Rückmeldeformular für die Helfer (HTML)
+
+Die Helfer melden ihre Monatsdaten per E-Mail. Damit das ohne Abtippen geht,
+erzeugt **Datei → Exportieren → Rückmeldeformular (HTML)…** aus der Vorlage
+`vorlagen/rueckmeldung.html` eine Datei `rueckmeldung_JJJJ_MM.html` für den
+geöffneten Monat mit den aktuell eingetragenen Helfern und der abgefragten
+Empfänger-Adresse (wird in den Einstellungen gemerkt). Die Datei verschickt die
+Planerin **von Hand** als Anhang (die Mailverwaltung läuft im Browser, eine
+Anbindung an ein Mailprogramm gibt es bewusst nicht). Jeder Helfer öffnet sie
+im Browser (PC oder Handy, offline), wählt seinen Namen, tippt im
+Monatskalender Urlaub / Wunsch frei / Dienstwunsch an (Wochenenden und
+Feiertage grau), prüft die Zusammenfassung, kann eine Bemerkung ergänzen und
+schickt den fertigen Text ab: „Per E-Mail senden" öffnet das Mailprogramm des
+Geräts mit Betreff und Text, „Text kopieren" legt ihn in die Zwischenablage,
+„Als Datei speichern" lädt ihn als Textdatei. Die Eingaben bleiben im Browser
+des Geräts gespeichert. Der Mailtext endet mit einer **Maschinenzeile**, die
+sich eindeutig und ohne KI einlesen lässt:
+
+```
+JA1;2026-11;8cdf0de4;T:2026-10-20T14:03:05;U:3,10-14;W:5,6;D:7-9;N:Am%2012.%20erst%20ab%2010%20Uhr;END
+```
+
+(Format `JA1`, Monat, Helfer-ID, **Zeitstempel** des Formulars (`T`, lokale
+Zeit des Helfers; steht auch lesbar als „Stand" im Mailtext), Urlaub/Wunsch/
+Dienstwunsch als Tageslisten mit Bereichen, Bemerkung URL-kodiert, Ende-Zeichen
+`END`.) Zwischen `JA1;` und
+`;END` kommt kein Leerzeichen vor, deshalb darf ein Mailprogramm die Zeile
+umbrechen oder mit `>` zitieren, das Einlesen bleibt eindeutig. Die Vorlage ist
+eine gewöhnliche HTML-Datei und lässt sich von Hand anpassen (Helferliste,
+Texte); eine angepasste Fassung im Ordner `vorlagen` neben dem Programm hat
+Vorrang vor der mitgelieferten.
+
+### Rückmeldungen einlesen (Import)
+
+Das Programm liest kein Postfach aus (die Mails liegen bei GMX im Browser; ein
+Zugriff hieße, das Passwort zu hinterlegen). Stattdessen gibt es drei Wege, die
+alle dieselbe Maschinenzeile lesen (`feedback/parser.py`, ohne KI: eine Zeile ist
+vollständig gültig oder wird mit Begründung abgelehnt):
+
+1. **Datei → Rückmeldungen importieren… (`Strg+I`)** und der große
+   **„Import"-Button** rechts neben den Stempeln öffnen denselben Dialog: oben
+   ein Textfeld (Mailtext aus GMX hineinkopieren, auch mehrere Mails
+   hintereinander; steht schon eine Rückmeldung in der Zwischenablage, ist sie
+   vorbelegt), dazu „Dateien wählen…" (`.txt`, `.eml`, `.html`) und
+   „Ablageordner durchsuchen". Die Tabelle zeigt je gefundener Rückmeldung
+   Helfer, Monat, Zahl der Tage je Art, Bemerkung, was ersetzt würde und den
+   Status (OK oder Fehlergrund, z. B. unbekannte Helfer-ID, Tag nicht im Monat).
+   Erst **„Übernehmen"** trägt die gültigen ein.
+2. **Ablageordner `Formularantworten`** neben dem Programmordner (im
+   Entwicklungsmodus im Projektstamm, nicht versioniert): je Monat ein
+   Unterordner (`2026-11_November`). Beim Formular-Export werden die Ordner
+   für den Monat und die nächsten sechs Monate angelegt (der Monatsordner ist
+   auch der vorgeschlagene Zielordner des Formulars), ebenso beim
+   Programmstart und über **Datei → Ablageordner aktualisieren** ab dem
+   heutigen Monat. Dort legt die Planerin die Antworten ab (Mailtext als
+   `.txt`, gespeicherte Mail `.eml`, oder die Textdatei aus dem Anhang).
+   **Beim Programmstart und beim Aktualisieren** liest das Programm alle
+   neuen oder geänderten Dateien ab dem heutigen Monat ein und meldet, was
+   übernommen wurde und was nicht. Was schon eingelesen ist, merkt sich
+   `eingelesen.json` im Monatsordner (Name, Größe, Änderungszeit), damit ein
+   erneuter Start keine Handänderungen überschreibt; `protokoll.txt` hält
+   fest, was wann eingelesen wurde, samt Bemerkung des Helfers. Eine
+   `LIESMICH.txt` im Ordner erklärt das Ablegen.
+
+Eine Rückmeldung **ersetzt** Urlaub, Wunsch und Dienstwunsch des Helfers für
+den gemeldeten Monat (andere Monate und andere Helfer bleiben unberührt) —
+eine korrigierte Rückmeldung gilt damit komplett. **Welcher Stand gilt:** Das
+Programm merkt sich je Helfer und Monat den Zeitstempel der zuletzt
+eingelesenen Rückmeldung und den Importzeitpunkt (`feedback_log` in
+`team.json`); der Import-Dialog zeigt beides in den Spalten „Stand" und
+„Letzter Import". Trägt eine Rückmeldung einen **älteren** Stand als die
+zuletzt eingelesene, fragt das Programm nach (auch beim Einlesen aus dem
+Ablageordner), bevor sie den neueren Stand ersetzt; mehrere Rückmeldungen in
+einem Durchgang werden nach Stand sortiert, die neueste gilt. Rückmeldungen
+der ersten Formularfassung ohne Zeitstempel werden ohne Vergleich übernommen. Die Bemerkung wird im
+Protokoll und in der Zusammenfassung gezeigt, nicht in den Plan geschrieben.
+Da die Abwesenheiten monatsübergreifend in `team.json` liegen, lassen sich
+Rückmeldungen für jeden Monat einlesen, nicht nur für den geöffneten; danach
+greift der normale Autosave.
 
 In den CSV-/Excel-/PDF-Exporten hat die Zusammenfassung eine eigene **RB**-Spalte;
 „Dienste gesamt" ist die gewichtete Dienstzahl (VOLL = 1, Tag/Nacht = 0,5,
@@ -468,7 +613,7 @@ Der **PDF-Export** (A4 **Hochformat**) ist der Aushang für das ganze Team:
 
 ```json
 {
-  "version": 6,
+  "version": 8,
   "last_year": 2026, "last_month": 8,
   "window_geometry": "…",
   "allow_overwrite": false,
@@ -477,7 +622,7 @@ Der **PDF-Export** (A4 **Hochformat**) ist der Aushang für das ganze Team:
   "entry_colors": {
     "FULL": "#5B9BD5", "HALF_MORNING": "#4DB6AC",
     "HALF_AFTERNOON": "#F2A54A", "ON_CALL": "#9575CD",
-    "VACATION": "#81C784", "BLOCK": "#C8A882"
+    "VACATION": "#81C784", "BLOCK": "#C8A882", "WISH": "#FFF176"
   },
   "skipped_version": "",
   "color_palette": "ozean",
@@ -489,7 +634,9 @@ Der **PDF-Export** (A4 **Hochformat**) ist der Aushang für das ganze Team:
 - `entry_colors`: die unter **Einstellungen → Farben…** gewählte Farbe je
   Eintragsart (fehlende Arten erhalten beim Laden die Standardfarbe).
   `HALF_MORNING`/`HALF_AFTERNOON` sind die halben Dienste „Tag"/„Nacht",
-  `BLOCK` die Wunsch-Tage.
+  `BLOCK` die Wunsch-Tage, `WISH` die Dienstwunsch-Tage.
+- `form_recipient`: die zuletzt im Rückmeldeformular eingetragene
+  Empfänger-Adresse.
 - `last_app_version`: die zuletzt gelaufene Programmversion — weicht sie beim
   Start ab, sichert das Programm zuerst den `data`-Ordner (siehe
   Datensicherung unten).

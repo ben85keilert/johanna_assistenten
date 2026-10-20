@@ -1,5 +1,6 @@
-"""Tab "Urlaub und Notizen": Abwesenheiten (Urlaub und Wunsch) eintragen
-und einsehen, dazu alle Tagesnotizen des Monats.
+"""Tab "Urlaub und Notizen": Abwesenheiten (Urlaub und Wunsch) sowie
+Dienstwuensche (Positivwuensche) eintragen und einsehen, dazu alle
+Tagesnotizen des Monats.
 
 Links die Helfer-Buttons (fuer wen angezeigt und eingetragen wird; Strg+Klick
 waehlt mehrere, "Alle" alle), daneben ein Monatskalender in Wochenform -
@@ -12,7 +13,10 @@ Tab-Zeile).
 Die Abwesenheiten liegen wie bisher in den Constraints der Helfer
 (team.json, monatsuebergreifend) - dieser Tab ist nur eine andere Sicht
 darauf. "Wunsch" ist die Oberflaechen-Bezeichnung der Freiwunsch-Tage
-(intern weiter blocked_dates/blocked_ranges, Dateiformat unveraendert).
+(intern weiter blocked_dates/blocked_ranges, Dateiformat unveraendert);
+"Dienstwunsch" sind die Tage, an denen jemand gern Dienst macht
+(wish_dates/wish_ranges). Ein Tag hat je Person hoechstens eine der drei
+Arten (models.DAY_KINDS / set_day_kind).
 """
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QComboBox,
@@ -24,9 +28,7 @@ from PySide6.QtCore import Qt, Signal, QDate, QTimer
 from PySide6.QtGui import QColor, QFont
 
 from models import (
-    Assistant, MonthPlan,
-    absence_days, set_absence_days, blocked_days, set_blocked_days,
-    holiday_name,
+    Assistant, MonthPlan, DAY_KINDS, day_kind, set_day_kind, holiday_name,
 )
 from persistence import AppSettings, DEFAULT_ENTRY_COLORS
 from datetime import date, timedelta
@@ -37,10 +39,29 @@ from .notes_panel import NotesPanel
 
 WEEKDAYS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
 
-# Stempel des Tabs
+# Stempel des Tabs: die drei Tagesarten (Schluessel wie models.DAY_KINDS)
+# und Loeschen
 STAMP_VACATION = "urlaub"
 STAMP_BLOCK = "block"
+STAMP_WISH = "wish"
 STAMP_CLEAR = "clear"
+
+# Beschriftung, Kuerzel (Kalender bei mehreren Helfern, Liste) und
+# Farbschluessel (AppSettings.entry_colors) je Tagesart
+KIND_LABELS = {"urlaub": "Urlaub", "block": "Wunsch", "wish": "Dienstwunsch"}
+KIND_SHORT = {"urlaub": "U", "block": "W", "wish": "D"}
+KIND_COLOR_KEYS = {"urlaub": "VACATION", "block": "BLOCK", "wish": "WISH"}
+
+
+def _kind_lists(assistant: Assistant, kind: str) -> tuple[list, list]:
+    """(Einzeltage, Zeitraeume) einer Tagesart - die Listen selbst, zum
+    Entfernen einzelner Listeneintraege."""
+    c = assistant.constraints
+    if kind == "block":
+        return c.blocked_dates, c.blocked_ranges
+    if kind == "wish":
+        return c.wish_dates, c.wish_ranges
+    return c.unavailable_dates, c.vacation_ranges
 
 
 class AbsenceTab(QWidget):
@@ -104,8 +125,12 @@ class AbsenceTab(QWidget):
             (STAMP_BLOCK, "Wunsch",
              "Tag anklicken: Freiwunsch setzen bzw. wieder entfernen "
              "(die Person moechte frei haben - kein Urlaub)."),
+            (STAMP_WISH, "Dienstwunsch",
+             "Tag anklicken: Dienstwunsch setzen bzw. wieder entfernen "
+             "(die Person moechte an dem Tag gern Dienst machen)."),
             (STAMP_CLEAR, "Loeschen",
-             "Tag anklicken: Urlaub oder Wunsch dieses Tages entfernen."),
+             "Tag anklicken: Urlaub, Wunsch oder Dienstwunsch dieses Tages "
+             "entfernen."),
         ]:
             btn = QPushButton(label)
             btn.setCheckable(True)
@@ -188,7 +213,7 @@ class AbsenceTab(QWidget):
         list_layout.addLayout(list_buttons)
 
         list_page.setLayout(list_layout)
-        self.side_tabs.addTab(list_page, "Abwesenheiten")
+        self.side_tabs.addTab(list_page, "Abwesenheiten/Wuensche")
 
         self.notes_panel = NotesPanel()
         self.notes_panel.notes_changed.connect(self._on_notes_changed)
@@ -223,24 +248,20 @@ class AbsenceTab(QWidget):
         self.refresh_calendar()
         self.notes_changed.emit()
 
-    def _vacation_color(self) -> QColor:
-        return QColor(self.settings.entry_colors.get(
-            "VACATION", DEFAULT_ENTRY_COLORS["VACATION"]
-        ))
-
-    def _block_color(self) -> QColor:
-        return QColor(self.settings.entry_colors.get(
-            "BLOCK", DEFAULT_ENTRY_COLORS["BLOCK"]
-        ))
+    def _kind_color(self, kind: str) -> QColor:
+        key = KIND_COLOR_KEYS[kind]
+        return QColor(self.settings.entry_colors.get(key, DEFAULT_ENTRY_COLORS[key]))
 
     def _update_legend(self):
         # Farbige Kaestchen in der Legende folgen den eingestellten Farben
+        swatches = "".join(
+            f'<span style="background-color:{self._kind_color(kind).name()};">'
+            f"&nbsp;&nbsp;&nbsp;</span> {label} &nbsp;&nbsp; "
+            for kind, label in KIND_LABELS.items()
+        )
         self.legend_label.setText(
-            f'<span style="background-color:{self._vacation_color().name()};">'
-            "&nbsp;&nbsp;&nbsp;</span> Urlaub &nbsp;&nbsp; "
-            f'<span style="background-color:{self._block_color().name()};">'
-            "&nbsp;&nbsp;&nbsp;</span> Wunsch &nbsp;&nbsp; "
-            f"{theme.NOTE_ICON} Notiz (Doppelklick auf einen Tag) &nbsp;&nbsp; "
+            swatches
+            + f"{theme.NOTE_ICON} Notiz (Doppelklick auf einen Tag) &nbsp;&nbsp; "
             "Mehrfachauswahl mit Strg/Shift, dann Rechtsklick"
         )
 
@@ -386,36 +407,35 @@ class AbsenceTab(QWidget):
         count = f"{len(days)} Tage, " if len(days) > 1 else ""
         suffix = f" ({count}{who})"
         menu = QMenu()
-        menu.addAction(
-            f"Urlaub setzen{suffix}",
-            lambda: self.apply_stamp(STAMP_VACATION, days, assistants, toggle=False),
-        )
-        menu.addAction(
-            f"Wunsch setzen{suffix}",
-            lambda: self.apply_stamp(STAMP_BLOCK, days, assistants, toggle=False),
-        )
+        for kind, label in KIND_LABELS.items():
+            menu.addAction(
+                f"{label} setzen{suffix}",
+                lambda _checked=False, k=kind:
+                self.apply_stamp(k, days, assistants, toggle=False),
+            )
         menu.addSeparator()
         menu.addAction(
-            f"Abwesenheit entfernen{suffix}",
+            f"Eintrag entfernen{suffix}",
             lambda: self.apply_stamp(STAMP_CLEAR, days, assistants),
         )
         menu.exec(self.calendar.mapToGlobal(pos))
 
     def apply_stamp(self, stamp: str, days: list[int], assistants: list[Assistant],
                     toggle: bool = True):
-        """Setzt/entfernt Urlaub oder Wunsch an den Tagen dieses Monats - fuer
-        alle uebergebenen (links gewaehlten) Helfer.
+        """Setzt/entfernt Urlaub, Wunsch oder Dienstwunsch an den Tagen
+        dieses Monats - fuer alle uebergebenen (links gewaehlten) Helfer.
 
         toggle=True (Klick): haben alle den Tag schon, wird er bei allen
         entfernt, sonst bei allen gesetzt. toggle=False (Kontextmenue): setzt
-        fuer alle Tage der Auswahl. Urlaub und Wunsch schliessen sich
+        fuer alle Tage der Auswahl. Die Tagesarten schliessen sich
         gegenseitig aus.
         """
         if not assistants:
             return
-        # Tagesmengen je Helfer (Urlaub, Wunsch) - erst am Ende zurueckschreiben
+        # Tagesmengen je Helfer und Art - erst am Ende zurueckschreiben
         sets = {
-            a.id: (absence_days(a.constraints), blocked_days(a.constraints))
+            a.id: {kind: get_days(a.constraints)
+                   for kind, (get_days, _set) in DAY_KINDS.items()}
             for a in assistants
         }
         changed = False
@@ -423,24 +443,25 @@ class AbsenceTab(QWidget):
         for day in days:
             d = date(self.year, self.month, day)
             if stamp == STAMP_CLEAR:
-                for vacation, blocked in sets.values():
-                    if d in vacation or d in blocked:
-                        vacation.discard(d)
-                        blocked.discard(d)
-                        changed = True
+                for per_kind in sets.values():
+                    for day_set in per_kind.values():
+                        if d in day_set:
+                            day_set.discard(d)
+                            changed = True
                 continue
 
-            index = 0 if stamp == STAMP_VACATION else 1
-            if all(d in pair[index] for pair in sets.values()):
+            if all(d in per_kind[stamp] for per_kind in sets.values()):
                 if toggle:
-                    for pair in sets.values():
-                        pair[index].discard(d)
+                    for per_kind in sets.values():
+                        per_kind[stamp].discard(d)
                     changed = True
                 continue
-            for pair in sets.values():
-                if d not in pair[index]:
-                    pair[index].add(d)
-                    pair[1 - index].discard(d)
+            for per_kind in sets.values():
+                if d not in per_kind[stamp]:
+                    per_kind[stamp].add(d)
+                    for other, day_set in per_kind.items():
+                        if other != stamp:
+                            day_set.discard(d)
                     changed = True
 
         if not changed:
@@ -448,9 +469,8 @@ class AbsenceTab(QWidget):
 
         # Zusammenhaengende Tage werden dabei zu Zeitraeumen zusammengefasst
         for assistant in assistants:
-            vacation, blocked = sets[assistant.id]
-            set_absence_days(assistant.constraints, vacation)
-            set_blocked_days(assistant.constraints, blocked)
+            for kind, (_get, set_days) in DAY_KINDS.items():
+                set_days(assistant.constraints, sets[assistant.id][kind])
         self.refresh_calendar()
         self.refresh_list()
         self.absences_changed.emit()
@@ -461,33 +481,29 @@ class AbsenceTab(QWidget):
         """Farbe und Beschriftungszeilen fuer einen Tag.
 
         Eine gewaehlte Person: deren Zustand. Mehrere: alle gewaehlten
-        Helfer, die an diesem Tag abwesend sind (U/W vor dem Namen).
+        Helfer mit Eintrag an diesem Tag (U/W/D vor dem Namen).
         """
         d = date(self.year, self.month, day)
         persons = self._selected_assistants()
         if len(persons) == 1:
-            person = persons[0]
-            if d in absence_days(person.constraints):
-                return self._vacation_color(), ["Urlaub"]
-            if d in blocked_days(person.constraints):
-                return self._block_color(), ["Wunsch"]
-            return None, []
+            kind = day_kind(persons[0].constraints, d)
+            if kind is None:
+                return None, []
+            return self._kind_color(kind), [KIND_LABELS[kind]]
 
-        lines, has_vacation, has_block = [], False, False
+        lines, kinds = [], set()
         for assistant in persons:
-            if d in absence_days(assistant.constraints):
-                lines.append(f"U {assistant.name}")
-                has_vacation = True
-            elif d in blocked_days(assistant.constraints):
-                lines.append(f"W {assistant.name}")
-                has_block = True
+            kind = day_kind(assistant.constraints, d)
+            if kind is not None:
+                lines.append(f"{KIND_SHORT[kind]} {assistant.name}")
+                kinds.add(kind)
         if not lines:
             return None, []
-        if has_vacation and has_block:
-            # Urlaub und Wunsch gemischt: neutral
+        if len(kinds) > 1:
+            # Verschiedene Arten gemischt: neutral
             color = QColor(theme.colors().separator)
         else:
-            color = self._vacation_color() if has_vacation else self._block_color()
+            color = self._kind_color(kinds.pop())
         return color, lines
 
     def refresh_calendar(self):
@@ -558,26 +574,25 @@ class AbsenceTab(QWidget):
     # --- Liste ----------------------------------------------------------
 
     def _all_absences(self) -> list[tuple]:
-        """Alle Abwesenheiten aller Helfer als (start, end, assistant, kind),
-        chronologisch: Zeitraeume und Einzeltage, Urlaub und Wunsch
-        (kind "block")."""
+        """Alle Eintraege aller Helfer als (start, end, assistant, kind),
+        chronologisch: Zeitraeume und Einzeltage, Urlaub ("urlaub"), Wunsch
+        ("block") und Dienstwunsch ("wish")."""
         absences = []
         for assistant in self.plan.assistants:
-            c = assistant.constraints
-            for start, end in c.vacation_ranges:
-                absences.append((start, end, assistant, "urlaub"))
-            for d in c.unavailable_dates:
-                absences.append((d, d, assistant, "urlaub"))
-            for start, end in c.blocked_ranges:
-                absences.append((start, end, assistant, "block"))
-            for d in c.blocked_dates:
-                absences.append((d, d, assistant, "block"))
+            for kind in DAY_KINDS:
+                singles, ranges = _kind_lists(assistant, kind)
+                for start, end in ranges:
+                    absences.append((start, end, assistant, kind))
+                for d in singles:
+                    absences.append((d, d, assistant, kind))
         absences.sort(key=lambda v: (v[0], v[1], v[2].name))
         return absences
 
     def refresh_list(self):
         """Liste: gefiltert auf die links gewaehlten Helfer, optional Monat
-        und Vergangenes. Ein gewaehlter Eintrag bleibt gewaehlt."""
+        und Vergangenes (Eintraege des angezeigten Monats sind immer zu
+        sehen, auch wenn er schon vorbei ist). Ein gewaehlter Eintrag bleibt
+        gewaehlt."""
         if not self.plan:
             return
         current = self.absence_list.currentItem()
@@ -598,15 +613,15 @@ class AbsenceTab(QWidget):
                 continue
             if only_month and (end < month_start or start > month_end):
                 continue
-            if not show_past and end < today:
+            if not show_past and end < today and end < month_start:
                 continue
 
             if start == end:
                 text = "{:%d.%m.%Y}   {}".format(start, assistant.name)
             else:
                 text = "{:%d.%m.%Y} - {:%d.%m.%Y}   {}".format(start, end, assistant.name)
-            if kind == "block":
-                text += "   [Wunsch]"
+            if kind != "urlaub":
+                text += f"   [{KIND_LABELS[kind]}]"
             item = QListWidgetItem(text)
             key = (assistant.id, start.isoformat(), end.isoformat(), kind)
             item.setData(Qt.ItemDataRole.UserRole, key)
@@ -656,8 +671,8 @@ class AbsenceTab(QWidget):
         h0.addWidget(assistant_combo)
         h0.addWidget(QLabel("Art:"))
         kind_combo = QComboBox()
-        kind_combo.addItem("Urlaub", "urlaub")
-        kind_combo.addItem("Wunsch", "block")
+        for kind_key, kind_label in KIND_LABELS.items():
+            kind_combo.addItem(kind_label, kind_key)
         index = kind_combo.findData(kind)
         if index >= 0:
             kind_combo.setCurrentIndex(index)
@@ -710,24 +725,19 @@ class AbsenceTab(QWidget):
     def _add_range(self, assistant: Assistant, start: date, end: date, kind: str):
         if assistant is None:
             return
-        get_days = absence_days if kind == "urlaub" else blocked_days
-        set_days = set_absence_days if kind == "urlaub" else set_blocked_days
-        days = get_days(assistant.constraints)
+        days = []
         d = start
         while d <= end:
-            days.add(d)
+            days.append(d)
             d += timedelta(days=1)
-        set_days(assistant.constraints, days)
+        # Ein Tag hat nur eine Art: aus den anderen Arten verschwindet er
+        set_day_kind(assistant.constraints, days, kind)
 
     def _remove_absence(self, assistant: Assistant, start: date, end: date, kind: str):
         """Entfernt einen Listeneintrag: Einzeltag oder Zeitraum."""
         if assistant is None:
             return
-        c = assistant.constraints
-        if kind == "block":
-            singles, ranges = c.blocked_dates, c.blocked_ranges
-        else:
-            singles, ranges = c.unavailable_dates, c.vacation_ranges
+        singles, ranges = _kind_lists(assistant, kind)
         if start == end and start in singles:
             singles.remove(start)
         elif (start, end) in ranges:

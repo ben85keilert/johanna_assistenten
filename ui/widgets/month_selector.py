@@ -16,7 +16,7 @@ class MonthSelector(QWidget):
         current_year = datetime.now().year
         for y in range(current_year - 2, current_year + 3):
             self.year_combo.addItem(str(y), y)
-        self.year_combo.setCurrentText(str(current_year))
+        self.year_combo.setCurrentIndex(self.year_combo.findData(current_year))
         self.year_combo.currentIndexChanged.connect(self._on_changed)
         layout.addWidget(self.year_combo)
 
@@ -41,11 +41,26 @@ class MonthSelector(QWidget):
         month = self.month_combo.currentData()
         self.month_changed.emit(year, month)
 
+    def _ensure_year(self, year: int):
+        """Jahr ausserhalb der Liste (z. B. aus einer geoeffneten Plan-Datei)
+        aufnehmen - sonst bliebe die Jahresauswahl falsch stehen und der
+        naechste Monatswechsel ginge ins falsche Jahr."""
+        if self.year_combo.findData(year) >= 0:
+            return
+        years = sorted(
+            {self.year_combo.itemData(i) for i in range(self.year_combo.count())}
+            | set(range(year - 1, year + 2))
+        )
+        self.year_combo.clear()
+        for y in years:
+            self.year_combo.addItem(str(y), y)
+
     def set_month(self, year: int, month: int):
         self.year_combo.blockSignals(True)
         self.month_combo.blockSignals(True)
 
-        self.year_combo.setCurrentText(str(year))
+        self._ensure_year(year)
+        self.year_combo.setCurrentIndex(self.year_combo.findData(year))
         self.month_combo.setCurrentIndex(month - 1)
 
         self.year_combo.blockSignals(False)

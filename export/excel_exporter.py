@@ -2,8 +2,9 @@ from pathlib import Path
 from openpyxl import Workbook
 from openpyxl.styles import PatternFill, Alignment, Font, Border, Side
 from openpyxl.utils import get_column_letter
-from models import MonthPlan, ShiftType, SHIFT_LABELS, is_effective
+from models import MonthPlan, ShiftType, SHIFT_LABELS, is_effective, WEEKDAYS_DE
 import calendar
+import datetime as dt
 
 
 def _hex_to_rgb(hex_color: str) -> tuple:
@@ -27,10 +28,8 @@ def export_excel(plan: MonthPlan, folder: str | Path) -> str:
     # Header-Zeile: Tage + Wochentag
     ws.cell(1, 1, "Assistent")
     for day in range(1, days_in_month + 1):
-        import datetime as dt
         d = dt.date(year, month, day)
-        weekday = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"][d.weekday()]
-        ws.cell(1, day + 1, f"{day}\n{weekday}")
+        ws.cell(1, day + 1, f"{day}\n{WEEKDAYS_DE[d.weekday()]}")
 
     # Daten
     thin_border = Border(
@@ -56,16 +55,18 @@ def export_excel(plan: MonthPlan, folder: str | Path) -> str:
                 # Farbe
                 try:
                     rgb = _hex_to_rgb(assistant.color)
-                    fill = PatternFill(start_color=f"{rgb[0]:02X}{rgb[1]:02X}{rgb[2]:02X}", end_color=f"{rgb[0]:02X}{rgb[1]:02X}{rgb[2]:02X}", fill_type="solid")
-                    cell.fill = fill
-                except:
+                except ValueError:
                     pass
+                else:
+                    hex_rgb = f"{rgb[0]:02X}{rgb[1]:02X}{rgb[2]:02X}"
+                    cell.fill = PatternFill(
+                        start_color=hex_rgb, end_color=hex_rgb, fill_type="solid"
+                    )
 
             cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
             cell.border = thin_border
 
             # Wochenende Hintergrund
-            import datetime as dt
             d = dt.date(year, month, day)
             if d.weekday() >= 5 and not matching:
                 cell.fill = PatternFill(start_color="E0E0E0", end_color="E0E0E0", fill_type="solid")

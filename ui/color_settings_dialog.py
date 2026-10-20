@@ -23,6 +23,7 @@ ENTRY_TYPES = [
 ] + [
     ("VACATION", "Urlaub"),
     ("BLOCK", "Wunsch (Freiwunsch)"),
+    ("WISH", "Dienstwunsch (moechte Dienst)"),
 ]
 
 _PREVIEW_W, _PREVIEW_H = 96, 24

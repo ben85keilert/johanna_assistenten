@@ -40,6 +40,9 @@ class AppSettings:
     # Programmversion, die zuletzt lief - weicht sie ab, sichert das
     # Programm beim Start zuerst den data-Ordner (persistence/backup.py)
     last_app_version: str = ""
+    # Empfaenger-Adresse im Rueckmeldeformular (Datei > Exportieren >
+    # Rueckmeldeformular); wird beim Erzeugen abgefragt und hier gemerkt
+    form_recipient: str = ""
 
 
 def load_settings() -> AppSettings:
@@ -73,6 +76,7 @@ def load_settings() -> AppSettings:
         color_palette=data.get("color_palette", "ozean"),
         dark_mode=data.get("dark_mode", False),
         last_app_version=data.get("last_app_version", ""),
+        form_recipient=data.get("form_recipient", ""),
     )
 
 

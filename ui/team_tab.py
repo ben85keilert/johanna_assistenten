@@ -104,14 +104,14 @@ class TeamTab(QWidget):
         table_font.setPointSize(theme.TEAM_FONT_PT)
         for idx in range(2):
             table = QTableWidget()
-            table.setColumnCount(8)
+            table.setColumnCount(9)
             # Max steht jeweils links von Min: Max begrenzt Min, wird also
             # zuerst eingestellt (sonst zieht ein spaeter gesetztes Max das
             # Min wieder zurueck)
             table.setHorizontalHeaderLabels([
                 "Name", "Max. Dienste", "Min. Dienste",
                 "Max. Folge", "Min. Block", "Abstand", "Freiwuensche",
-                "RB anhaengen",
+                "Dienstwuensche", "RB anhaengen",
             ])
             # Abwechselnd gefaerbte Zeilen im Ton des Farbschemas
             # (QPalette.AlternateBase = theme.stripe)
@@ -201,6 +201,9 @@ class TeamTab(QWidget):
         elif field == "quota":
             # Freiwunsch-Kontingent; "Alle" (None) = alle Wunsch-Tage hart
             s.free_wish_quota = None if value < 0 else value
+        elif field == "work_quota":
+            # Dienstwunsch-Kontingent; "Alle" (None) = alle Wunsch-Tage
+            s.work_wish_quota = None if value < 0 else value
 
         self.profiles_changed.emit()
 
@@ -291,6 +294,21 @@ class TeamTab(QWidget):
                 )
                 table.setCellWidget(i, 6, quota_stepper)
 
+                work_quota_stepper = self._make_stepper(
+                    profile_idx, assistant, "work_quota", "Dienstwuensche",
+                    -1 if s.work_wish_quota is None else s.work_wish_quota,
+                    -1, 31, special_min_text="Alle",
+                )
+                work_quota_stepper.setToolTip(
+                    "Dienstwunsch-Kontingent: so viele Dienste im Monat "
+                    "sollen auf die Dienstwunsch-Tage der Person fallen "
+                    "(z. B. 3 Dienste an 7 gewuenschten Tagen). Weiche "
+                    "Vorgabe: der Generator bevorzugt diese Tage, alle "
+                    "harten Regeln und die faire Verteilung gelten weiter.\n"
+                    "'Alle' = so viele Wunsch-Tage wie moeglich."
+                )
+                table.setCellWidget(i, 7, work_quota_stepper)
+
                 attach_combo = QComboBox()
                 for label, value in ATTACH_OPTIONS:
                     attach_combo.addItem(label, value)
@@ -309,7 +327,7 @@ class TeamTab(QWidget):
                     lambda _, c=attach_combo, p=profile_idx, aid=assistant.id:
                     self.on_attach_changed(p, aid, c.currentData())
                 )
-                table.setCellWidget(i, 7, attach_combo)
+                table.setCellWidget(i, 8, attach_combo)
 
             # Feste Spalten etwas grosszuegiger als die Stepper selbst;
             # rechts darf Rand bleiben
@@ -317,9 +335,9 @@ class TeamTab(QWidget):
             header.setStretchLastSection(False)
             header.setSectionResizeMode(QHeaderView.ResizeMode.Fixed)
             table.setColumnWidth(COL_NAME, theme.TEAM_NAME_COL_W)
-            for col in range(1, 7):
+            for col in range(1, 8):
                 table.setColumnWidth(col, theme.STEPPER_WIDTH + 12)
-            table.setColumnWidth(7, 130)
+            table.setColumnWidth(8, 130)
 
         self._refreshing = False
         self.add_btn.setEnabled(len(self.plan.assistants) < 10)
@@ -377,9 +395,29 @@ class TeamTab(QWidget):
             return
 
         removed = self.plan.assistants[row]
+        # Mit dem Autosave ist das nach wenigen Sekunden endgueltig
+        reply = QMessageBox.question(
+            self, "Helfer entfernen",
+            f"{removed.name} wirklich aus dem Team entfernen?\n\n"
+            "Abwesenheiten, Wuensche und Vorlagen-Einstellungen dieser "
+            "Person gehen verloren; ihre Eintraege im Dienstplan "
+            f"{month_label(self.plan.year, self.plan.month)} werden "
+            "geloescht (in anderen Monaten beim naechsten Oeffnen).",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
         del self.plan.assistants[row]
         for profile in self.profiles:
             profile.settings.pop(removed.id, None)
+        # Verwaiste Eintraege wuerden sonst unsichtbar als Abdeckung zaehlen
+        for day in list(self.plan.schedule.keys()):
+            kept = [e for e in self.plan.schedule[day] if e.assistant_id != removed.id]
+            if kept:
+                self.plan.schedule[day] = kept
+            else:
+                del self.plan.schedule[day]
         self.refresh_table()
         self.assistants_changed.emit()
 

@@ -28,6 +28,14 @@ NOTE_ICON = "\U0001F4DD"
 # Zeichen fuer Wunsch-Tage (Freiwuensche) im Planraster. Bewusst
 # unaufgeregt; Alternative: "" (kein Zeichen, nur die Wunsch-Farbe)
 WISH_MARK = "/"
+# Zeichen fuer Dienstwunsch-Tage (Positivwuensche: "hier moechte ich
+# arbeiten") im Planraster; auf einem erfuellten Wunsch (Dienst am Wunsch-
+# Tag) erscheint es klein in der Ecke
+WORK_WISH_MARK = "+"
+
+# Import-Button rechts neben den Stempeln (Dienstplan)
+IMPORT_BUTTON_W = 120
+IMPORT_BUTTON_H = 48
 
 # Zeilenhoehe der Tabellen (Pixel)
 ROW_HEIGHT = 32

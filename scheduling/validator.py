@@ -5,7 +5,7 @@ from models import (
 )
 from .engine import (
     shift_weight, _day_needs, _needs_oncall, _works_on, ON_CALL_KINDS,
-    is_blocked, is_on_vacation,
+    is_blocked, is_on_vacation, is_work_wish, work_wish_target,
 )
 import calendar
 
@@ -54,6 +54,48 @@ def validate(plan: MonthPlan) -> list[Warning]:
             )
         )
 
+    # Doppelte Abdeckung: mehr Tagesdienst oder mehr Rufbereitschaft als
+    # noetig (z. B. von Hand gestempelt neben einem Wuerfel-Eintrag)
+    names = {a.id: a.name for a in plan.assistants}
+    unknown_days = []
+    for day in range(1, days_in_month + 1):
+        entries = [e for e in plan.schedule.get(day, []) if is_effective(e)]
+        if any(e.assistant_id not in names for e in entries):
+            unknown_days.append(day)
+        duties = [e for e in entries if is_duty(e.shift_type)]
+        fulls = [e for e in duties if e.shift_type == ShiftType.FULL]
+        halves = [e for e in duties if e.shift_type != ShiftType.FULL]
+        over = (
+            len(fulls) > 1 or (fulls and halves)
+            or sum(1 for e in halves if e.shift_type == ShiftType.HALF_MORNING) > 1
+            or sum(1 for e in halves if e.shift_type == ShiftType.HALF_AFTERNOON) > 1
+        )
+        if over:
+            who = ", ".join(
+                f"{names.get(e.assistant_id, '?')} {SHIFT_LABELS[e.shift_type]}"
+                for e in duties
+            )
+            warnings.append(
+                Warning(f"Tag {day}: doppelt besetzt ({who})", "warning")
+            )
+        oncalls = [e for e in entries if e.shift_type == ShiftType.ON_CALL]
+        if len(oncalls) > 1:
+            who = ", ".join(names.get(e.assistant_id, "?") for e in oncalls)
+            warnings.append(
+                Warning(
+                    f"Tag {day}: {len(oncalls)} Rufbereitschaften ({who})",
+                    "warning",
+                )
+            )
+    if unknown_days:
+        warnings.append(
+            Warning(
+                "Eintraege eines nicht (mehr) vorhandenen Helfers am "
+                + ", ".join(f"{d}." for d in unknown_days),
+                "warning",
+            )
+        )
+
     # Kandidaten-Tage ohne getroffene Wahl (Tag zaehlt oben schon als offen;
     # dieser Hinweis erklaert, warum: es liegt eine Auswahl bereit)
     label = {ShiftType.FULL: "Dienst", ShiftType.ON_CALL: "Rufbereitschaft"}
@@ -90,26 +132,46 @@ def validate(plan: MonthPlan) -> list[Warning]:
                     )
                 )
 
+    # Ein leerer Monat (noch nichts gewuerfelt) braucht keine Zielhinweise
+    plan_empty = not any(
+        is_effective(e) for entries in plan.schedule.values() for e in entries
+    )
+
     for assistant in plan.assistants:
         if not assistant.active:
             continue
 
         assigned = 0.0
         oncall = 0
+        wish_done = 0
         overridden_wishes = []
+        on_vacation = []
         for day, entries in plan.schedule.items():
             for e in entries:
                 if e.assistant_id != assistant.id or not is_effective(e):
                     continue
                 if is_duty(e.shift_type):
                     assigned += shift_weight(e.shift_type)
+                    if is_work_wish(assistant, day, year, month):
+                        wish_done += 1
                 elif e.shift_type == ShiftType.ON_CALL:
                     oncall += 1
+                # Wirksamer Eintrag auf eigenem Urlaubstag: der Generator
+                # macht das nie - nur von Hand (oder Urlaub nachtraeglich)
+                if is_on_vacation(assistant, day, year, month):
+                    on_vacation.append(day)
                 # Wirksamer Eintrag auf eigenem Block-Tag = ueberplanter
                 # Freiwunsch (Urlaub wird nie ueberplant und hat Vorrang)
-                if (is_blocked(assistant, day, year, month)
-                        and not is_on_vacation(assistant, day, year, month)):
+                elif is_blocked(assistant, day, year, month):
                     overridden_wishes.append(day)
+        if on_vacation:
+            days_text = ", ".join(f"{d}." for d in sorted(on_vacation))
+            warnings.append(
+                Warning(
+                    f"Urlaub ueberplant: {assistant.name} am {days_text}",
+                    "warning",
+                )
+            )
         if overridden_wishes:
             days_text = ", ".join(f"{d}." for d in sorted(overridden_wishes))
             warnings.append(
@@ -126,9 +188,20 @@ def validate(plan: MonthPlan) -> list[Warning]:
             warnings.append(
                 Warning(f"{assistant.name}: {assigned:g} Dienste (max. {max_shifts})", "warning")
             )
-        if min_shifts is not None and 0 < assigned < min_shifts:
+        if min_shifts is not None and assigned < min_shifts and not plan_empty:
             warnings.append(
                 Warning(f"{assistant.name}: nur {assigned:g} Dienste (min. {min_shifts})", "info")
+            )
+
+        # Dienstwuensche: weniger Dienste auf Wunsch-Tagen als gewuenscht
+        wish_target = work_wish_target(assistant, year, month)
+        if wish_target > 0 and wish_done < wish_target and not plan_empty:
+            warnings.append(
+                Warning(
+                    f"{assistant.name}: {wish_done} von {wish_target} "
+                    "Diensten an Dienstwunsch-Tagen",
+                    "info",
+                )
             )
 
         # Rufbereitschaft muss der (gewichteten) Dienstzahl entsprechen;

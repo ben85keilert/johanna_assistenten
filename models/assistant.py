@@ -13,6 +13,11 @@ class AssistantConstraints:
     # Kategorie (kein Urlaub); Feldnamen bleiben fuer das Dateiformat
     blocked_dates: list[date] = field(default_factory=list)
     blocked_ranges: list[tuple[date, date]] = field(default_factory=list)
+    # Dienstwuensche (Positivwuensche): Tage, an denen die Person gern
+    # Dienst machen moechte. Weiche Vorgabe: der Generator bevorzugt diese
+    # Tage fuer ihre Dienste, bis work_wish_quota erreicht ist
+    wish_dates: list[date] = field(default_factory=list)
+    wish_ranges: list[tuple[date, date]] = field(default_factory=list)
     max_consecutive_days: int = 3
     # Helfer mit weiter Anreise kommen immer fuer mehrere Tage am Stueck;
     # der Generator plant sie nur in Bloecken von mindestens dieser Laenge ein
@@ -31,9 +36,17 @@ class AssistantConstraints:
     # des Monats haben Vorrang (hart), weitere Nachrang (duerfen im
     # Konfliktfall ueberplant werden; Urlaub bleibt immer zwingend)
     free_wish_quota: int | None = None
+    # Dienstwunsch-Kontingent: so viele Dienste je Monat sollen auf
+    # Dienstwunsch-Tage fallen ("3 Dienste an 7 Moeglichkeiten"); None =
+    # "Alle" (so viele Wunsch-Tage wie moeglich). Nie eine harte Regel
+    work_wish_quota: int | None = None
     # Soll-Dienste als Spanne; None = "Auto" (gleichmaessig verteilen)
     min_shifts: int | None = None
     max_shifts: int | None = None
+    # Zuletzt eingelesene Rueckmeldung je Monat ("JJJJ-MM" -> {"stand":
+    # Zeitstempel aus dem Formular, "eingelesen": Zeitpunkt des Imports});
+    # eine aeltere Rueckmeldung loest beim Import eine Rueckfrage aus
+    feedback_log: dict[str, dict[str, str]] = field(default_factory=dict)
 
 
 @dataclass
@@ -97,3 +110,45 @@ def set_blocked_days(constraints: AssistantConstraints, days: set[date]) -> None
     singles, ranges = _normalize_days(days)
     constraints.blocked_dates = singles
     constraints.blocked_ranges = ranges
+
+
+def work_wish_days(constraints: AssistantConstraints) -> set[date]:
+    """Alle Dienstwunsch-Tage (Einzeltage + Zeitraeume) als Tagesmenge."""
+    return _collect_days(constraints.wish_dates, constraints.wish_ranges)
+
+
+def set_work_wish_days(constraints: AssistantConstraints, days: set[date]) -> None:
+    """Schreibt die Dienstwunsch-Tagesmenge normalisiert zurueck."""
+    singles, ranges = _normalize_days(days)
+    constraints.wish_dates = singles
+    constraints.wish_ranges = ranges
+
+
+# Die drei datumsbasierten Tagesarten je Helfer: Schluessel -> (lesen,
+# schreiben). Ein Tag gehoert immer nur zu einer Art - wer eine setzt,
+# entfernt ihn aus den anderen (siehe set_day_kind)
+DAY_KINDS = {
+    "urlaub": (absence_days, set_absence_days),
+    "block": (blocked_days, set_blocked_days),
+    "wish": (work_wish_days, set_work_wish_days),
+}
+
+
+def day_kind(constraints: AssistantConstraints, d: date) -> str | None:
+    """Art des Tages ("urlaub"/"block"/"wish") oder None. Urlaub hat
+    Vorrang, falls Altdaten einen Tag doppelt fuehren."""
+    for kind, (get_days, _set) in DAY_KINDS.items():
+        if d in get_days(constraints):
+            return kind
+    return None
+
+
+def set_day_kind(constraints: AssistantConstraints, days, kind: str | None) -> None:
+    """Setzt die Tage auf genau diese Art (None = alle Arten entfernen);
+    aus den jeweils anderen Arten werden sie entfernt."""
+    days = set(days)
+    for other, (get_days, set_days) in DAY_KINDS.items():
+        current = get_days(constraints)
+        new = (current | days) if other == kind else (current - days)
+        if new != current:
+            set_days(constraints, new)

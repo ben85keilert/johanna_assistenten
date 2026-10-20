@@ -9,14 +9,16 @@ Eine PySide6-Anwendung zur Verwaltung und Planung von Assistentendiensten für e
 - **Team-Verwaltung:** Bis zu 10 Assistenten mit individuellen Farben
 - **Dienst-Planung:** Interaktives Monatsraster mit Rechtsklick-Menü
 - **Constraints:**
-  - Nicht verfügbare Einzeltage
-  - Urlaubszeiträume
-  - Max. aufeinanderfolgende Arbeitstage (1-3)
-  - Ziel-Dienste pro Monat (oder Auto für Gleichverteilung)
+  - Nicht verfügbare Einzeltage und Urlaubszeiträume (zwingend)
+  - Wunsch-Tage (frei haben) mit Kontingent und Dienstwunsch-Tage (arbeiten
+    wollen, z. B. „3 Dienste an 7 Möglichkeiten") mit Kontingent
+  - Max. aufeinanderfolgende Arbeitstage, Min. Block, Mindestabstand
+  - Min./Max. Dienste pro Monat (oder Auto für Gleichverteilung)
 - **Automatische Generierung:** Greedy-Algorithmus respektiert alle Constraints
 - **Schicht-Typen:** VOLL (24h), Tag und Nacht (halbe Dienste), Rufbereitschaft
 - **Sperren/Entsperren:** Einzelne Dienste vor Neuberechnung fixieren
 - **Export:** CSV, Excel (mit Farben), PDF (Hochformat, ohne Urlaube/Wünsche), Notizen als Text
+- **Rückmeldungen der Helfer:** HTML-Formular zum Verschicken (offline, auch am Handy) und Import der Antworten (Zwischenablage, Dateien, Ablageordner `Formularantworten` neben dem Programmordner)
 - **Persistierung:** JSON-Speicherung / -Laden
 
 ## Installation
@@ -115,7 +117,7 @@ einem Windows-Rechner oder automatisch über GitHub Actions.
    ```
 4. Build starten:
    ```bat
-   uv run pyinstaller --noconsole --onedir --name JohannaAssistenten main.py
+   uv run pyinstaller --noconsole --onedir --name JohannaAssistenten --add-data "vorlagen;vorlagen" main.py
    ```
 5. Das fertige Programm liegt in `dist\JohannaAssistenten\` —
    den ganzen Ordner kopieren und `JohannaAssistenten.exe` starten.
@@ -162,7 +164,7 @@ Voraussetzungen: uv und die Qt-Systembibliotheken aus dem Abschnitt
    ```
 2. Build starten:
    ```bash
-   uv run pyinstaller --noconsole --onedir --name JohannaAssistenten main.py
+   uv run pyinstaller --noconsole --onedir --name JohannaAssistenten --add-data "vorlagen:vorlagen" main.py
    ```
 3. Das fertige Programm liegt in `dist/JohannaAssistenten/` — den ganzen Ordner
    kopieren und `./JohannaAssistenten` darin starten. Der Ordner ist ca. 220 MB

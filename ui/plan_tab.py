@@ -9,8 +9,7 @@ from PySide6.QtGui import QColor, QFont
 
 from models import (
     MonthPlan, ShiftEntry, ShiftType, SHIFT_LABELS, SHIFT_NAMES, is_effective,
-    absence_days, set_absence_days, blocked_days, set_blocked_days,
-    holiday_name,
+    day_kind, set_day_kind, holiday_name,
 )
 from persistence import AppSettings
 from datetime import date
@@ -31,6 +30,7 @@ STAMP_NM = "nm"
 STAMP_ONCALL = "oncall"
 STAMP_VACATION = "vacation"
 STAMP_BLOCK = "block"
+STAMP_WISH = "wish"
 STAMP_NOTE = "note"
 STAMP_LOCK = "lock"
 STAMP_DELETE = "delete"
@@ -44,6 +44,13 @@ STAMP_SHIFTS = {
     STAMP_VM: ShiftType.HALF_MORNING,
     STAMP_NM: ShiftType.HALF_AFTERNOON,
     STAMP_ONCALL: ShiftType.ON_CALL,
+}
+
+# Stempel der datumsbasierten Tagesarten -> Schluessel in models.DAY_KINDS
+STAMP_DAY_KINDS = {
+    STAMP_VACATION: "urlaub",
+    STAMP_BLOCK: "block",
+    STAMP_WISH: "wish",
 }
 
 # Dienstarten mit Kandidaten-Mechanik: mehrere manuelle Vorschlaege je Tag,
@@ -65,6 +72,8 @@ class PlanTab(QWidget):
     constraints_changed = Signal()
     # Tagesnotiz per Dialog geaendert -> Notizen-Liste im Urlaub-Tab nachziehen
     notes_changed = Signal()
+    # Import-Button (rechts neben den Stempeln) -> JohannaApp.import_feedback
+    import_requested = Signal()
 
     def __init__(self, settings: AppSettings, parent=None):
         super().__init__(parent)
@@ -120,6 +129,10 @@ class PlanTab(QWidget):
             (STAMP_BLOCK, "Wunsch",
              "Freiwunsch setzen/entfernen: die Person moechte an dem Tag "
              "frei haben (Kontingent \"Freiwuensche\" im Team-Tab)."),
+            (STAMP_WISH, "Dienstwunsch",
+             "Dienstwunsch setzen/entfernen: die Person moechte an dem Tag "
+             "gern Dienst machen (Kontingent \"Dienstwuensche\" im "
+             "Team-Tab). Weiche Vorgabe fuer das Wuerfeln."),
             (STAMP_NOTE, "Notiz",
              "Tagesnotiz bearbeiten - alle Notizen auch im Tab "
              "\"Urlaub und Notizen\"."),
@@ -190,6 +203,17 @@ class PlanTab(QWidget):
         self.control_bar_widget = dice_box
 
         tools_layout.addStretch()
+
+        # Rueckmeldungen der Helfer einlesen - gross und ganz rechts
+        self.import_btn = QPushButton("Import")
+        self.import_btn.setProperty("role", "primary")
+        self.import_btn.setMinimumSize(theme.IMPORT_BUTTON_W, theme.IMPORT_BUTTON_H)
+        self.import_btn.setToolTip(
+            "Rueckmeldungen der Helfer einlesen: Mailtext aus der "
+            "Zwischenablage, Dateien oder der Ablageordner Formularantworten."
+        )
+        self.import_btn.clicked.connect(self.import_requested.emit)
+        tools_layout.addWidget(self.import_btn)
         layout.addLayout(tools_layout)
 
         # Tabelle
@@ -222,20 +246,27 @@ class PlanTab(QWidget):
 
     # --- Einstellungen ---
 
+    # Die Einstellungen landen in settings.json - ebenfalls per Autosave,
+    # deshalb melden auch sie eine Aenderung
+
     def on_overwrite_toggled(self, checked: bool):
         self.settings.allow_overwrite = checked
+        self.plan_modified.emit()
 
     def on_seed_changed(self, value: int):
         self.settings.seed = value
+        self.plan_modified.emit()
 
     def on_deterministic_toggled(self, checked: bool):
         self.settings.deterministic = checked
         self.seed_spin.setEnabled(checked)
         self.seed_label.setEnabled(checked)
+        self.plan_modified.emit()
 
     def on_view_changed(self):
         self.settings.split_view = bool(self.view_combo.currentData())
         self.rebuild_grid()
+        self.plan_modified.emit()
 
     # --- Stempel ---
 
@@ -285,6 +316,22 @@ class PlanTab(QWidget):
         self.plan.schedule.setdefault(day, []).append(
             ShiftEntry(assistant_id=assistant_id, shift_type=shift_type, locked=True)
         )
+
+    def _drop_generated_conflicts(self, day: int, shift_type: ShiftType):
+        """Ein manueller Stempel ersetzt die Wuerfel-Vorschlaege anderer, die
+        dieselbe Abdeckung liefern wuerden (sonst waere der Tag doppelt
+        besetzt, bis neu gewuerfelt wird). Fixierte Vorschlaege bleiben."""
+        if shift_type == ShiftType.ON_CALL:
+            conflicts = (ShiftType.ON_CALL,)
+        elif shift_type == ShiftType.FULL:
+            conflicts = (ShiftType.FULL, ShiftType.HALF_MORNING, ShiftType.HALF_AFTERNOON)
+        else:
+            conflicts = (ShiftType.FULL, shift_type)
+        entries = self.plan.schedule.get(day, [])
+        self.plan.schedule[day] = [
+            e for e in entries
+            if not (e.generated and not e.locked and e.shift_type in conflicts)
+        ]
 
     # --- Kandidaten (mehrere Personen fuer denselben Dienst/RB am Tag) ---
 
@@ -383,36 +430,33 @@ class PlanTab(QWidget):
                             )
                         )
                     else:
+                        self._drop_generated_conflicts(day, shift_type)
                         self._set_entry(assistant_id, day, shift_type)
                 else:
                     continue
                 changed = True
 
-            elif stamp in (STAMP_VACATION, STAMP_BLOCK):
+            elif stamp in STAMP_DAY_KINDS:
+                kind = STAMP_DAY_KINDS[stamp]
                 d = date(self.plan.year, self.plan.month, day)
-                if stamp == STAMP_VACATION:
-                    get_days, set_days = absence_days, set_absence_days
-                    other_get, other_set = blocked_days, set_blocked_days
+                current = day_kind(assistant.constraints, d)
+                if current == kind:
+                    set_day_kind(assistant.constraints, [d], None)
                 else:
-                    get_days, set_days = blocked_days, set_blocked_days
-                    other_get, other_set = absence_days, set_absence_days
-                days = get_days(assistant.constraints)
-                if d in days:
-                    days.discard(d)
-                else:
-                    other_days = other_get(assistant.constraints)
-                    if entry is not None or d in other_days:
-                        if not allow_overwrite:
+                    # Urlaub/Wunsch vertragen sich nicht mit einem Dienst:
+                    # ein Wuerfel-Vorschlag weicht, ein fester Eintrag nur
+                    # mit "Ueberschreiben". Ein Dienstwunsch darf neben
+                    # einem Eintrag stehen (dann ist er erfuellt)
+                    if entry is not None and kind != "wish":
+                        if not (entry.generated and not entry.locked) and not allow_overwrite:
                             continue
-                        if entry is not None:
-                            self._remove_entry(assistant_id, day)
-                        if d in other_days:
-                            other_days.discard(d)
-                            other_set(assistant.constraints, other_days)
-                    days.add(d)
+                        self._remove_entry(assistant_id, day)
+                    # Andere Tagesart ersetzen nur mit "Ueberschreiben"
+                    if current is not None and not allow_overwrite:
+                        continue
+                    set_day_kind(assistant.constraints, [d], kind)
                 # Zusammenhaengende Tage werden automatisch zu
-                # Zeitraeumen (Urlaub-Tab) zusammengefasst
-                set_days(assistant.constraints, days)
+                # Zeitraeumen (Tab "Urlaub und Notizen") zusammengefasst
                 changed = True
 
             elif stamp == STAMP_LOCK:
@@ -427,7 +471,7 @@ class PlanTab(QWidget):
         if changed:
             self.refresh_display()
             self.plan_modified.emit()
-            if stamp in (STAMP_VACATION, STAMP_BLOCK):
+            if stamp in STAMP_DAY_KINDS:
                 self.constraints_changed.emit()
 
     # --- Plan/Anzeige ---
@@ -783,30 +827,43 @@ class PlanTab(QWidget):
     def _handle_conflicts(self, result, seed: int):
         """Zeigt die Konflikte des Laufs; weicht die Nutzerwahl von den
         angewendeten Vorschlaegen ab, wiederholt sich der Lauf mit einem
-        Resolver, der diese Entscheidungen beantwortet."""
-        dialog = ConflictDialog(result.conflicts, self)
-        if not dialog.exec():
-            return  # Vorschlaege behalten
-        decisions = dialog.decisions()
-        applied = {
-            (c.day, c.kind): c.options[c.applied].assistant_id
-            for c in result.conflicts
-        }
-        if decisions == applied:
-            return
+        Resolver, der diese Entscheidungen beantwortet. Weil der Zufall ab
+        einer abweichenden Entscheidung anders laeuft, kann der neue Lauf
+        andere Konflikte haben - die erscheinen dann wieder im Dialog, bis
+        der Nutzer alles bestaetigt (oder abbricht)."""
+        decisions = {}
+        for _round in range(20):
+            dialog = ConflictDialog(result.conflicts, self)
+            if not dialog.exec():
+                return  # Vorschlaege/aktuellen Stand behalten
+            decisions.update(dialog.decisions())
+            applied = {
+                (c.day, c.kind): c.options[c.applied].assistant_id
+                for c in result.conflicts
+            }
+            if all(decisions.get(key) == value for key, value in applied.items()):
+                return  # alles so bestaetigt, wie es im Plan steht
 
-        def resolver(conflict):
-            key = (conflict.day, conflict.kind)
-            if key in decisions:
-                for option in conflict.options:
-                    if option.assistant_id == decisions[key]:
-                        return option
-            return conflict.options[conflict.proposal]
+            def resolver(conflict, decided=dict(decisions)):
+                key = (conflict.day, conflict.kind)
+                if key in decided:
+                    for option in conflict.options:
+                        if option.assistant_id == decided[key]:
+                            return option
+                return conflict.options[conflict.proposal]
 
-        rerun = generate(self.plan, seed, resolver=resolver)
-        self.plan = rerun.plan
-        self.refresh_display()
-        self.plan_modified.emit()
+            result = generate(self.plan, seed, resolver=resolver)
+            self.plan = result.plan
+            self.refresh_display()
+            self.plan_modified.emit()
+            # Nur noch Konflikte, die der Nutzer schon entschieden hat und
+            # die genau so angewendet wurden? Dann fertig, sonst nachfragen
+            if not result.conflicts or all(
+                (c.day, c.kind) in decisions
+                and c.options[c.applied].assistant_id == decisions[(c.day, c.kind)]
+                for c in result.conflicts
+            ):
+                return
 
     def reset_schedule(self):
         if not self.plan:
@@ -875,6 +932,8 @@ class PlanTab(QWidget):
                        lambda: self.apply_stamp(STAMP_VACATION, cells))
         menu.addAction("Wunsch setzen/entfernen" + suffix,
                        lambda: self.apply_stamp(STAMP_BLOCK, cells))
+        menu.addAction("Dienstwunsch setzen/entfernen" + suffix,
+                       lambda: self.apply_stamp(STAMP_WISH, cells))
         menu.addSeparator()
         menu.addAction("Fixieren" + suffix, lambda: self.set_locked(cells, True))
         menu.addAction("Fixierung loesen" + suffix, lambda: self.set_locked(cells, False))

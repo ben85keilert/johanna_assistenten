@@ -5,6 +5,7 @@ from .shift import (
 from .assistant import (
     Assistant, AssistantConstraints,
     absence_days, set_absence_days, blocked_days, set_blocked_days,
+    work_wish_days, set_work_wish_days, DAY_KINDS, day_kind, set_day_kind,
 )
 from .plan import MonthPlan
 from .holidays import bavarian_holidays, holiday_name
@@ -27,6 +28,11 @@ __all__ = [
     "set_absence_days",
     "blocked_days",
     "set_blocked_days",
+    "work_wish_days",
+    "set_work_wish_days",
+    "DAY_KINDS",
+    "day_kind",
+    "set_day_kind",
     "MonthPlan",
     "bavarian_holidays",
     "holiday_name",

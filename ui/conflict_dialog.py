@@ -4,7 +4,10 @@ Konnte ein Tag nur durch Ueberplanen eines Nachrang-Freiwunschs besetzt
 werden, hat der Generator bereits einen vernuenftigen Vorschlag angewendet.
 Dieser Dialog zeigt alle diese Entscheidungen und laesst je Konflikt eine
 andere ueberplanbare Person oder "Tag offen lassen" waehlen. Urlaube sind
-zwingend und tauchen hier nie auf; Wuensche sind es nicht.
+zwingend und tauchen hier nie auf; Wuensche sind es nicht: erst Nachrang-
+Wuensche (ueber dem Kontingent), reicht das nicht, als allerletzte Stufe
+auch Vorrang-Wuensche. Weicht die Wahl ab, wuerfelt PlanTab mit gleichem
+Seed neu; tauchen dabei neue Konflikte auf, erscheint der Dialog erneut.
 """
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QComboBox,
@@ -30,10 +33,11 @@ class ConflictDialog(QDialog):
         layout = QVBoxLayout()
         hint = QLabel(
             "An diesen Tagen war der Plan nur durch Ueberplanen eines "
-            "Freiwunschs (Nachrang) zu fuellen - Urlaube sind zwingend, "
-            "Wuensche nicht. Der Vorschlag ist jeweils vorausgewaehlt; "
-            "hier laesst sich eine andere Person oder \"Tag offen lassen\" "
-            "waehlen."
+            "Freiwunschs zu fuellen - Urlaube sind zwingend, Wuensche nicht. "
+            "Zuerst kommen Wuensche ueber dem Kontingent (Nachrang) dran, "
+            "erst wenn das nicht reicht, ein Wunsch innerhalb des Kontingents "
+            "(Vorrang). Der Vorschlag ist jeweils vorausgewaehlt; hier laesst "
+            "sich eine andere Person oder \"Tag offen lassen\" waehlen."
         )
         hint.setWordWrap(True)
         layout.addWidget(hint)

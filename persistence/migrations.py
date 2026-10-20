@@ -8,9 +8,9 @@ Dateien nach einem Programm-Update weiter funktionieren.
 from __future__ import annotations
 import copy
 
-CURRENT_TEAM_VERSION = 6
-CURRENT_PLAN_VERSION = 7
-CURRENT_SETTINGS_VERSION = 6
+CURRENT_TEAM_VERSION = 8
+CURRENT_PLAN_VERSION = 9
+CURRENT_SETTINGS_VERSION = 8
 
 # Einheitliche Farben je Eintragsart (statt einer Farbe je Helfer).
 # Aenderbar unter Einstellungen > Farben; hier die Standardwerte.
@@ -21,6 +21,7 @@ DEFAULT_ENTRY_COLORS = {
     "ON_CALL": "#9575CD",         # Rufbereitschaft: Violett
     "VACATION": "#81C784",        # Urlaub: Gruen
     "BLOCK": "#C8A882",           # Wunsch (Freiwunsch): Hellbraun
+    "WISH": "#FFF176",            # Dienstwunsch (Positivwunsch): Hellgelb
 }
 
 # Bis Settings-Version 5 war Rot die Standardfarbe fuer Wunsch-Tage (damals
@@ -95,6 +96,27 @@ def migrate_team(data) -> dict:
                 if isinstance(settings, dict):
                     settings.setdefault("free_wish_quota", None)
         version = 6
+
+    if version < 7:
+        # v6 -> v7: Dienstwuensche (Positivwuensche: Tage, an denen jemand
+        # gern Dienst macht) samt Kontingent - auch in beiden Vorlagen
+        for assistant in data.get("assistants", []):
+            constraints = assistant.get("constraints", {})
+            constraints.setdefault("wish_dates", [])
+            constraints.setdefault("wish_ranges", [])
+            constraints.setdefault("work_wish_quota", None)
+        for profile in data.get("profiles", []):
+            for settings in profile.get("settings", {}).values():
+                if isinstance(settings, dict):
+                    settings.setdefault("work_wish_quota", None)
+        version = 7
+
+    if version < 8:
+        # v7 -> v8: zuletzt eingelesene Rueckmeldung je Monat (Stand +
+        # Importzeit) - fuer die Rueckfrage bei aelteren Rueckmeldungen
+        for assistant in data.get("assistants", []):
+            assistant.get("constraints", {}).setdefault("feedback_log", {})
+        version = 8
 
     data["version"] = CURRENT_TEAM_VERSION
     return data
@@ -185,6 +207,25 @@ def migrate_plan(data: dict) -> dict:
             assistant.get("constraints", {}).setdefault("free_wish_quota", None)
         version = 7
 
+    if version < 8:
+        # v7 -> v8: Dienstwunsch-Kontingent im Einstellungs-Schnappschuss;
+        # Vollplan-Dateien tragen die Dienstwunsch-Tage bei den Constraints
+        for settings in data.get("settings", {}).values():
+            if isinstance(settings, dict):
+                settings.setdefault("work_wish_quota", None)
+        for assistant in data.get("assistants", []):
+            constraints = assistant.get("constraints", {})
+            constraints.setdefault("wish_dates", [])
+            constraints.setdefault("wish_ranges", [])
+            constraints.setdefault("work_wish_quota", None)
+        version = 8
+
+    if version < 9:
+        # v8 -> v9: Vollplan-Dateien tragen feedback_log bei den Constraints
+        for assistant in data.get("assistants", []):
+            assistant.get("constraints", {}).setdefault("feedback_log", {})
+        version = 9
+
     data["version"] = CURRENT_PLAN_VERSION
     return data
 
@@ -227,6 +268,18 @@ def migrate_settings(data: dict) -> dict:
                 and colors["BLOCK"].upper() == OLD_DEFAULT_BLOCK_COLOR):
             colors["BLOCK"] = DEFAULT_ENTRY_COLORS["BLOCK"]
         version = 6
+
+    if version < 7:
+        # v6 -> v7: Farbe der Dienstwunsch-Tage (WISH)
+        colors = data.get("entry_colors")
+        if isinstance(colors, dict):
+            colors.setdefault("WISH", DEFAULT_ENTRY_COLORS["WISH"])
+        version = 7
+
+    if version < 8:
+        # v7 -> v8: Empfaenger-Adresse des Rueckmeldeformulars
+        data.setdefault("form_recipient", "")
+        version = 8
 
     data["version"] = CURRENT_SETTINGS_VERSION
     return data

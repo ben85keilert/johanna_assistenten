@@ -8,8 +8,7 @@ from PySide6.QtGui import QPainter, QColor, QFont, QPen
 
 from PySide6.QtCore import QPoint
 
-from models import ShiftType, SHIFT_LABELS, is_effective, holiday_name
-from scheduling.engine import is_on_vacation, is_blocked
+from models import ShiftType, SHIFT_LABELS, is_effective, holiday_name, day_kind
 from persistence import AppSettings
 from . import theme
 
@@ -34,7 +33,9 @@ class CellDelegate(QStyledItemDelegate):
     Hand gesetzt oder fixiert) sind kraeftig gefaerbt; noch in Planung
     befindliche (gewuerfelt, nicht fixiert) erscheinen transparent und tragen
     einen Punkt. Fixierte tragen ein Schloss, Urlaub ein "U", Wunsch-Tage
-    theme.WISH_MARK. Grundflaeche und Schriftfarbe folgen dem Farbschema."""
+    theme.WISH_MARK, Dienstwunsch-Tage theme.WORK_WISH_MARK (auf einem
+    erfuellten Dienstwunsch klein in der Ecke). Grundflaeche und Schriftfarbe
+    folgen dem Farbschema."""
 
     def __init__(self, plan_provider, settings: AppSettings, parent=None):
         super().__init__(parent)
@@ -56,15 +57,15 @@ class CellDelegate(QStyledItemDelegate):
         assistant = next((a for a in plan.assistants if a.id == assistant_id), None)
         entries = plan.schedule.get(day, [])
         entry = next((e for e in entries if e.assistant_id == assistant_id), None)
-        # Urlaub hat Vorrang vor Wunsch, falls beides gesetzt ist
-        vacation = assistant is not None and is_on_vacation(
-            assistant, day, plan.year, plan.month
+        # Art des Tages fuer diese Person: Urlaub / Wunsch (frei) /
+        # Dienstwunsch (moechte arbeiten) - ein Tag hat hoechstens eine Art
+        kind = (
+            day_kind(assistant.constraints, date(plan.year, plan.month, day))
+            if assistant is not None else None
         )
-        blocked = (
-            not vacation
-            and assistant is not None
-            and is_blocked(assistant, day, plan.year, plan.month)
-        )
+        vacation = kind == "urlaub"
+        blocked = kind == "block"
+        work_wish = kind == "wish"
         # Wochenenden und bayerische Feiertage bekommen dieselbe graue
         # Grundflaeche (reine Anzeige, keine Planungslogik)
         gray_day = (
@@ -104,6 +105,9 @@ class CellDelegate(QStyledItemDelegate):
         elif blocked:
             fill = self._entry_color("BLOCK")
             painter.fillRect(option.rect, fill)
+        elif work_wish:
+            fill = self._entry_color("WISH")
+            painter.fillRect(option.rect, fill)
         text_color = theme.text_on(fill)
 
         # Nicht gewaehlter Kandidat: gestrichelter Rahmen in der Typfarbe
@@ -126,6 +130,8 @@ class CellDelegate(QStyledItemDelegate):
             text = "U"
         elif blocked:
             text = theme.WISH_MARK
+        elif work_wish:
+            text = theme.WORK_WISH_MARK
         if text:
             font = QFont()
             font.setBold(entry is not None and not is_open_candidate)
@@ -157,6 +163,14 @@ class CellDelegate(QStyledItemDelegate):
             painter.setBrush(self._entry_color("BLOCK").darker(120))
             painter.setPen(Qt.PenStyle.NoPen)
             painter.drawPolygon(triangle)
+
+        # Erfuellter Dienstwunsch: Dienst auf eigenem Wunsch-Tag -> kleines
+        # Wunschzeichen unten rechts
+        if entry is not None and is_effective(entry) and work_wish and theme.WORK_WISH_MARK:
+            mark_rect = QRect(option.rect.right() - 14, option.rect.bottom() - 15, 12, 14)
+            painter.setPen(text_color)
+            painter.setFont(QFont("", 9))
+            painter.drawText(mark_rect, Qt.AlignmentFlag.AlignCenter, theme.WORK_WISH_MARK)
 
         # Notizsymbol unten links: der Tag hat eine Notiz und diese Person
         # ist an dem Tag aktiv (Dienst oder Rufbereitschaft) - z. B.

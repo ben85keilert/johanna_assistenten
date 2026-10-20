@@ -3,14 +3,14 @@ import sys
 from datetime import datetime
 
 from PySide6.QtWidgets import (
-    QApplication, QMessageBox, QFileDialog, QProgressDialog,
+    QApplication, QMessageBox, QFileDialog, QProgressDialog, QInputDialog,
 )
 from PySide6.QtCore import QByteArray, QTimer, Qt
 from PySide6.QtGui import QAction, QActionGroup
 
 from version import __version__, GITHUB_REPO
 
-from models import MonthPlan
+from models import MonthPlan, month_label as month_label_safe
 from persistence import (
     save, load, save_team, load_team, save_plan, load_plan,
     load_profiles, load_settings, save_settings,
@@ -22,6 +22,12 @@ from ui.team_tab import TeamTab
 from ui.plan_tab import PlanTab
 from ui.absence_tab import AbsenceTab
 from ui import theme
+from feedback import (
+    ensure_month_folders, scan_new_files, read_file_text, parse_text,
+    mark_processed, apply_feedback, month_folder, inbox_root,
+    last_import, is_older_than_last, format_stamp,
+)
+from feedback.parser import KIND_LABELS
 
 
 # Abstand zwischen zwei automatischen Sicherungen. Bewusst kurz: mehr als
@@ -63,7 +69,8 @@ class JohannaApp:
         self.team_tab.assistants_changed.connect(self.window.mark_modified)
         self.team_tab.profiles_changed.connect(self.window.mark_modified)
         self.plan_tab.plan_modified.connect(self.window.mark_modified)
-        self.plan_tab.constraints_changed.connect(self.team_tab.refresh_all)
+        # Urlaub/Wunsch/Soll im Raster geaendert: der Team-Tab zeigt nur
+        # Vorlagen und Namen, ein Neuaufbau seiner Tabellen waere unnoetig
         self.plan_tab.constraints_changed.connect(self.absence_tab.refresh_all)
         # Ein Monat fuer alle Tabs: Monatswaehler in der Tab-Zeile
         self.window.month_selector.month_changed.connect(self.change_month)
@@ -76,6 +83,7 @@ class JohannaApp:
         self.plan_tab.notes_changed.connect(self.absence_tab.refresh_notes)
         self.absence_tab.notes_export_requested.connect(self.export_notes)
         self.absence_tab.month_change_requested.connect(self.change_month)
+        self.plan_tab.import_requested.connect(self.import_feedback)
         self.window.on_close_request = self.handle_close_request
 
         self.load_plan_to_ui()
@@ -83,6 +91,9 @@ class JohannaApp:
         self._start_autosave()
         self._install_signal_handlers()
         self._report_recoveries()
+        # Ablageordner: Monatsordner anlegen und neue Antworten ab dem
+        # heutigen Monat einlesen - erst nach dem Fensteraufbau
+        QTimer.singleShot(500, lambda: self.refresh_inbox(manual=False))
 
     def _backup_on_version_change(self):
         if self.settings.last_app_version == __version__:
@@ -181,12 +192,28 @@ class JohannaApp:
         backup_action.triggered.connect(self.create_data_backup)
         file_menu.addAction(backup_action)
 
+        file_menu.addSeparator()
+        import_action = QAction("Rueckmeldungen importieren...", self.window)
+        import_action.setShortcut("Ctrl+I")
+        import_action.triggered.connect(self.import_feedback)
+        file_menu.addAction(import_action)
+
+        inbox_action = QAction("Ablageordner aktualisieren", self.window)
+        inbox_action.setToolTip(
+            "Neue Antworten aus dem Ordner Formularantworten ab dem heutigen "
+            "Monat einlesen und fehlende Monatsordner anlegen."
+        )
+        inbox_action.triggered.connect(lambda: self.refresh_inbox(manual=True))
+        file_menu.addAction(inbox_action)
+        file_menu.addSeparator()
+
         export_menu = file_menu.addMenu("Exportieren")
         for label, handler in [
             ("CSV", self.export_csv),
             ("Excel", self.export_excel),
             ("PDF", self.export_pdf),
             ("Notizen (Text)", self.export_notes),
+            ("Rueckmeldeformular (HTML)...", self.export_form),
         ]:
             action = QAction(label, self.window)
             action.triggered.connect(handler)
@@ -603,6 +630,175 @@ class JohannaApp:
                 QMessageBox.information(self.window, "Erfolg", f"Notizen exportiert:\n{f}")
             except Exception as e:
                 QMessageBox.critical(self.window, "Fehler", f"Export fehlgeschlagen:\n{e}")
+
+    def export_form(self):
+        """Rueckmeldeformular fuer den geoeffneten Monat mit den aktuellen
+        Helfern erzeugen. Die Datei wird von Hand verschickt (Anhang im
+        Webmailer) - deshalb nur Empfaenger abfragen und Datei ablegen."""
+        from export.form_exporter import export_form
+        from models import month_label
+        label = month_label(self.plan.year, self.plan.month)
+        recipient, ok = QInputDialog.getText(
+            self.window, "Rueckmeldeformular",
+            f"Formular fuer {label} mit {len(self.plan.assistants)} Helfern.\n\n"
+            "E-Mail-Adresse, an die die Helfer ihre Rueckmeldung schicken\n"
+            "(wird im Formular eingetragen; leer = Helfer tragen sie selbst ein):",
+            text=self.settings.form_recipient,
+        )
+        if not ok:
+            return
+        if recipient.strip() != self.settings.form_recipient:
+            self.settings.form_recipient = recipient.strip()
+            self.window.mark_modified()
+        # Ablageordner dieses Monats (und der naechsten) anlegen; er ist der
+        # vorgeschlagene Zielordner, dort landen spaeter auch die Antworten
+        try:
+            ensure_month_folders(self.plan.year, self.plan.month)
+            suggested = str(month_folder(self.plan.year, self.plan.month))
+        except OSError as e:
+            print(f"Ablageordner nicht angelegt: {e}", file=sys.stderr)
+            suggested = ""
+        folder = QFileDialog.getExistingDirectory(
+            self.window, "Zielordner waehlen", suggested
+        )
+        if not folder:
+            return
+        try:
+            f = export_form(self.plan, folder, recipient)
+        except Exception as e:
+            QMessageBox.critical(self.window, "Fehler", f"Export fehlgeschlagen:\n{e}")
+            return
+        QMessageBox.information(
+            self.window, "Rueckmeldeformular",
+            f"Formular erzeugt:\n{f}\n\n"
+            "Die Datei als Anhang an alle Helfer schicken (z. B. im Webmailer). "
+            "Jeder oeffnet sie im Browser, tippt seine Tage an und schickt den "
+            "fertigen Text per E-Mail zurueck.\n\n"
+            f"Antworten dann im Ablageordner {inbox_root()} in den Monatsordner "
+            "legen - sie werden beim naechsten Start eingelesen - oder ueber "
+            "\"Import\" einfuegen.",
+        )
+
+    # --- Rueckmeldungen der Helfer ---------------------------------------
+
+    def import_feedback(self, initial_files=None):
+        """Datei > Rueckmeldungen importieren / Import-Button: Dialog mit
+        Vorschau; erst "Uebernehmen" traegt ein."""
+        from ui.import_dialog import ImportDialog
+        dialog = ImportDialog(self.plan, self.window, initial_files=initial_files)
+        if not dialog.exec():
+            return
+        self.apply_feedback_list(dialog.feedbacks(), show_summary=True)
+
+    def apply_feedback_list(self, feedbacks, show_summary: bool) -> list[str]:
+        """Traegt gueltige Rueckmeldungen ein, merkt eingelesene Dateien im
+        Ablageordner und aktualisiert alle Tabs. Gibt die Protokollzeilen
+        zurueck."""
+        by_id = {a.id: a for a in self.plan.assistants}
+        lines = []
+        # Aelteste zuerst: liegen mehrere Rueckmeldungen desselben Helfers fuer
+        # denselben Monat vor, gilt am Ende die neueste
+        for fb in sorted(feedbacks, key=lambda f: (f.month_key(), f.assistant_id, f.stamp)):
+            assistant = by_id.get(fb.assistant_id)
+            if assistant is None or not fb.ok:
+                continue
+            if is_older_than_last(assistant, fb) and not self._confirm_older(assistant, fb):
+                lines.append(
+                    f"{assistant.name}, {fb.month_key()}: aelterer Stand "
+                    f"({format_stamp(fb.stamp)}) nicht uebernommen"
+                )
+                if fb.path is not None:
+                    try:
+                        mark_processed(fb.path, lines[-1])
+                    except OSError:
+                        pass
+                continue
+            apply_feedback(assistant, fb)
+            counts = ", ".join(
+                f"{fb.count(k)} {KIND_LABELS[k]}" for k in KIND_LABELS if fb.count(k)
+            ) or "keine Tage"
+            summary = f"{assistant.name}, {fb.month_key()}: {counts}"
+            summary += f" (Stand {format_stamp(fb.stamp) or 'ohne Zeitstempel'})"
+            if fb.note:
+                summary += f"; Bemerkung: {fb.note}"
+            lines.append(summary)
+            if fb.path is not None:
+                try:
+                    mark_processed(fb.path, summary)
+                except OSError as e:
+                    print(f"Eingelesen-Merker nicht geschrieben: {e}", file=sys.stderr)
+        if lines:
+            self.plan_tab.refresh_display()
+            self.absence_tab.refresh_all()
+            self.window.mark_modified()
+            self.window.status_bar.showMessage(
+                f"{len(lines)} Rueckmeldung(en) uebernommen", 8000
+            )
+            if show_summary:
+                QMessageBox.information(
+                    self.window, "Rueckmeldungen uebernommen", "\n".join(lines)
+                )
+        return lines
+
+    def _confirm_older(self, assistant, fb) -> bool:
+        """Rueckfrage: die Rueckmeldung ist aelter als die zuletzt eingelesene."""
+        last = last_import(assistant, fb.year, fb.month) or {}
+        reply = QMessageBox.question(
+            self.window, "Aeltere Rueckmeldung",
+            f"{assistant.name}, {month_label_safe(fb.year, fb.month)}:\n\n"
+            f"Diese Rueckmeldung hat den Stand {format_stamp(fb.stamp)}.\n"
+            f"Zuletzt eingelesen wurde ein neuerer Stand vom "
+            f"{format_stamp(last.get('stand', ''))} "
+            f"(eingelesen am {format_stamp(last.get('eingelesen', ''))}).\n\n"
+            "Die aeltere Rueckmeldung trotzdem uebernehmen? Sie ersetzt dann "
+            "den neueren Stand.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        return reply == QMessageBox.StandardButton.Yes
+
+    def refresh_inbox(self, manual: bool):
+        """Programmstart / Datei > Ablageordner aktualisieren: Monatsordner
+        ab heute anlegen, neue Antworten ab dem heutigen Monat einlesen."""
+        today = datetime.now()
+        try:
+            ensure_month_folders(today.year, today.month)
+            files = scan_new_files(min_month=(today.year, today.month))
+        except OSError as e:
+            self._report_save_error(e, "Ablageordner", force_dialog=manual)
+            return
+        feedbacks, problems = [], []
+        for path in files:
+            try:
+                found = parse_text(read_file_text(path), source=path.name)
+            except Exception as e:
+                problems.append(f"{path.name}: nicht lesbar ({e})")
+                continue
+            if not found:
+                problems.append(f"{path.name}: keine Rueckmeldung (JA1-Zeile) gefunden")
+                continue
+            for fb in found:
+                fb.path = path
+                if fb.ok and fb.assistant_id not in {a.id for a in self.plan.assistants}:
+                    fb.error = "Helfer-ID unbekannt"
+                if fb.ok:
+                    feedbacks.append(fb)
+                else:
+                    problems.append(f"{path.name}: {fb.error}")
+        lines = self.apply_feedback_list(feedbacks, show_summary=False)
+        if not lines and not problems:
+            if manual:
+                QMessageBox.information(
+                    self.window, "Ablageordner",
+                    f"Keine neuen Rueckmeldungen in\n{inbox_root()}",
+                )
+            return
+        text = ""
+        if lines:
+            text += "Eingelesen:\n" + "\n".join(lines)
+        if problems:
+            text += ("\n\n" if text else "") + "Nicht uebernommen:\n" + "\n".join(problems)
+        QMessageBox.information(self.window, "Ablageordner aktualisiert", text)
 
     # --- Automatisches Update (GitHub-Releases) -------------------------
 

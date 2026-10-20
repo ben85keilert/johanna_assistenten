@@ -33,8 +33,19 @@ Freiwunsch-Kontingent (Stufe 2): Block-Tage sind Wuensche. Ohne Kontingent
 (free_wish_quota=None) bleiben sie hart wie Urlaub. Mit Kontingent N haben
 die chronologisch ersten N Block-Tage des Monats Vorrang (hart), weitere
 Nachrang: Bleibt ein Tag sonst offen, darf ein Nachrang-Wunsch ueberplant
-werden - das wird als Conflict gemeldet (Dialog in der UI). Urlaub, hartes
-Max, Folgen und Mindestabstand werden auch dabei nie verletzt.
+werden - das wird als Conflict gemeldet (Dialog in der UI). Reicht auch das
+nicht, wird als allerletzte Stufe ein Vorrang-Wunsch ueberplant (ebenfalls
+als Conflict, Vorschlag: wenigste Dienste). Urlaub, hartes Max, Folgen und
+Mindestabstand werden auch dabei nie verletzt.
+
+Dienstwuensche (Positivwuensche): Tage, an denen jemand gern Dienst macht
+(wish_dates/wish_ranges), mit Kontingent work_wish_quota ("3 Dienste an 7
+Moeglichkeiten"; None = so viele wie moeglich). Weiche Vorgabe: vor der
+allgemeinen Fuellung bekommt jeder auf seinen Wunsch-Tagen Dienste bis zum
+Kontingent (fair: wer anteilig am wenigsten erfuellt ist, zuerst);
+Blockfahrer bevorzugen Bloecke ganz auf Wunsch-Tagen. Alle harten Regeln
+und die faire Verteilung gelten weiter - Dienstwuensche nehmen nie einem
+anderen Tag die Abdeckung.
 """
 from __future__ import annotations
 import random
@@ -43,7 +54,7 @@ from dataclasses import dataclass, field
 from datetime import date
 from models import (
     MonthPlan, ShiftEntry, ShiftType, DUTY_TYPES, is_duty, is_effective,
-    blocked_days,
+    blocked_days, work_wish_days,
 )
 
 ON_CALL_KINDS = (ShiftType.ON_CALL,)
@@ -154,6 +165,28 @@ def wish_overhang(assistant, year: int, month: int) -> int:
         if d.year == year and d.month == month
     )
     return max(0, count - quota)
+
+
+def is_work_wish(assistant, day: int, year: int, month: int) -> bool:
+    """Dienstwunsch-Tag (Positivwunsch) dieser Person?"""
+    d = date(year, month, day)
+    if d in assistant.constraints.wish_dates:
+        return True
+    for start, end in assistant.constraints.wish_ranges:
+        if start <= d <= end:
+            return True
+    return False
+
+
+def work_wish_target(assistant, year: int, month: int) -> int:
+    """So viele Dienste sollen in diesem Monat auf Dienstwunsch-Tage fallen:
+    das Kontingent, hoechstens aber die Zahl der Wunsch-Tage im Monat."""
+    count = sum(
+        1 for d in work_wish_days(assistant.constraints)
+        if d.year == year and d.month == month
+    )
+    quota = assistant.constraints.work_wish_quota
+    return count if quota is None else min(quota, count)
 
 
 def shift_weight(shift_type: ShiftType) -> float:
@@ -295,14 +328,26 @@ def generate(plan: MonthPlan, seed: int | None = None,
     #    zaehlen nicht mit
     assigned = {a.id: 0.0 for a in active}
     oncall_assigned = {a.id: 0 for a in active}
-    for entries in plan.schedule.values():
+    # Erfuellte Dienstwuensche: wirksame Dienste auf eigenen Wunsch-Tagen
+    wish_done = {a.id: 0 for a in active}
+    for day, entries in plan.schedule.items():
         for e in entries:
             if e.assistant_id not in assigned or not is_effective(e):
                 continue
             if is_duty(e.shift_type):
                 assigned[e.assistant_id] += shift_weight(e.shift_type)
+                if is_work_wish(by_id[e.assistant_id], day, year, month):
+                    wish_done[e.assistant_id] += 1
             elif e.shift_type == ShiftType.ON_CALL:
                 oncall_assigned[e.assistant_id] += 1
+    wish_target = {a.id: work_wish_target(a, year, month) for a in active}
+
+    def wish_deficit(a) -> int:
+        return wish_target[a.id] - wish_done[a.id]
+
+    def wish_ratio(a) -> float:
+        # Anteil erfuellter Dienstwuensche (fuer faire Reihenfolge)
+        return wish_done[a.id] / wish_target[a.id] if wish_target[a.id] else 1.0
 
     tolerance = 1.5
     fair_share = days_in_month / len(active)
@@ -337,14 +382,21 @@ def generate(plan: MonthPlan, seed: int | None = None,
         # Helfer unter ihrem Minimum zuerst, dann die mit den wenigsten Diensten
         return min(pool, key=lambda a: (0 if below_min(a) else 1, assigned[a.id], rng.random()))
 
-    def _wish_conflict(day: int, kind: str, pool: list, place) -> None:
-        """Konfliktstufe: Tag ist nur durch Ueberplanen eines Nachrang-
-        Freiwunschs besetzbar. pool ist nach Vorschlagsguete sortiert;
-        ohne Resolver wird der Vorschlag angewendet, sonst entscheidet er.
-        Der Konflikt wird fuer den Dialog gemeldet."""
+    def _wish_conflict(day: int, kind: str, nachrang: list, vorrang: list,
+                       place) -> None:
+        """Konfliktstufe: Tag ist nur durch Ueberplanen eines Freiwunschs
+        besetzbar. nachrang (Wuensche ueber dem Kontingent) und vorrang
+        (Wuensche innerhalb des Kontingents - allerletzte Stufe) sind je
+        nach Vorschlagsguete sortiert; der erste Nachrang-Eintrag ist der
+        Vorschlag, sonst der erste Vorrang-Eintrag. Ohne Resolver wird der
+        Vorschlag angewendet, sonst entscheidet er. Der Konflikt wird fuer
+        den Dialog gemeldet."""
         options = [
-            ConflictOption(a.id, True, f"{a.name} (ueberplant Freiwunsch)")
-            for a in pool
+            ConflictOption(a.id, True, f"{a.name} (ueberplant Nachrang-Freiwunsch)")
+            for a in nachrang
+        ] + [
+            ConflictOption(a.id, True, f"{a.name} (ueberplant Vorrang-Freiwunsch)")
+            for a in vorrang
         ]
         options.append(ConflictOption(None, False, "Tag offen lassen"))
         conflict = Conflict(day=day, kind=kind, options=options, proposal=0)
@@ -452,9 +504,19 @@ def generate(plan: MonthPlan, seed: int | None = None,
                 starts.append(start)
             if not starts:
                 break
+            if wish_deficit(a) > 0:
+                # Dienstwunsch: Bloecke ganz auf Wunsch-Tagen bevorzugen
+                preferred = [
+                    s for s in starts
+                    if all(is_work_wish(a, d, year, month)
+                           for d in range(s, s + block_len))
+                ]
+                starts = preferred or starts
             start = rng.choice(starts)
             for d in range(start, start + block_len):
                 _add_entry(plan, d, a.id, ShiftType.FULL)
+                if is_work_wish(a, d, year, month):
+                    wish_done[a.id] += 1
             assigned[a.id] += block_len
             for rb_days in attach_spans(attach, start, block_len):
                 for d in rb_days:
@@ -497,6 +559,33 @@ def generate(plan: MonthPlan, seed: int | None = None,
             _add_entry(plan, rb_day, a.id, ShiftType.ON_CALL)
             oncall_assigned[a.id] += 1
 
+    # 3b. Dienstwuensche (Positivwuensche): auf noch leeren Wunsch-Tagen
+    #     bekommt die Person Dienst, bis ihr Kontingent erreicht ist. Weiche
+    #     Vorgabe unter allen harten Regeln und der fairen Soll-Grenze;
+    #     bei mehreren Wuenschen fuer denselben Tag zuerst, wer anteilig am
+    #     wenigsten erfuellt ist, dann wer die wenigsten Dienste hat
+    wish_days = [
+        d for d in range(1, days_in_month + 1)
+        if _day_needs(plan, d) == ShiftType.FULL
+        and any(is_work_wish(a, d, year, month) for a in single_assistants)
+    ]
+    rng.shuffle(wish_days)
+    for day in wish_days:
+        if _day_needs(plan, day) != ShiftType.FULL:
+            continue
+        pool = [
+            a for a in single_assistants
+            if is_work_wish(a, day, year, month) and wish_deficit(a) > 0
+        ]
+        pool = candidates(day, 1.0, pool)
+        if not pool:
+            continue
+        chosen = min(pool, key=lambda a: (wish_ratio(a), assigned[a.id], rng.random()))
+        _add_entry(plan, day, chosen.id, ShiftType.FULL)
+        assigned[chosen.id] += 1.0
+        wish_done[chosen.id] += 1
+        try_attach_oncall(chosen, day)
+
     # 4. Restliche Tage einzeln fuellen (VOLL fuer leere Tage,
     #    fehlende Haelfte fuer halb abgedeckte Tage)
     open_days = [d for d in range(1, days_in_month + 1) if _day_needs(plan, d) is not None]
@@ -525,11 +614,12 @@ def generate(plan: MonthPlan, seed: int | None = None,
                      or assigned[a.id] + weight <= a.constraints.max_shifts)
             ]
         if not available:
-            # Konfliktstufe: Nachrang-Freiwunsch ueberplanen. Urlaub,
-            # Vorrang-Wuensche und harte Grenzen bleiben unantastbar
-            pool = [
+            # Konfliktstufe: Freiwunsch ueberplanen - erst Nachrang (ueber
+            # dem Kontingent), reicht das nicht, als allerletzte Stufe
+            # Vorrang. Urlaub und harte Grenzen bleiben unantastbar
+            overridable = [
                 a for a in active
-                if wish_priority(a, day, year, month) == "nachrang"
+                if wish_priority(a, day, year, month) is not None
                 and not is_on_vacation(a, day, year, month)
                 and not _works_on(plan, a.id, day)
                 and not exceeds_consecutive(plan, a.id, day)
@@ -537,22 +627,31 @@ def generate(plan: MonthPlan, seed: int | None = None,
                 and (a.constraints.max_shifts is None
                      or assigned[a.id] + weight <= a.constraints.max_shifts)
             ]
-            if pool:
+            nachrang = [a for a in overridable
+                        if wish_priority(a, day, year, month) == "nachrang"]
+            vorrang = [a for a in overridable
+                       if wish_priority(a, day, year, month) == "vorrang"]
+            if overridable:
                 # Vorschlag: groesster Wunsch-Ueberhang, dann wenigste Dienste
-                pool.sort(key=lambda a: (
+                nachrang.sort(key=lambda a: (
                     -wish_overhang(a, year, month), assigned[a.id], rng.random()
                 ))
+                vorrang.sort(key=lambda a: (assigned[a.id], rng.random()))
 
                 def place_duty(a, d=day, w=weight, n=needed):
                     _add_entry(plan, d, a.id, n)
                     assigned[a.id] += w
+                    if is_work_wish(a, d, year, month):
+                        wish_done[a.id] += 1
 
-                _wish_conflict(day, "dienst", pool, place_duty)
+                _wish_conflict(day, "dienst", nachrang, vorrang, place_duty)
             continue
 
         chosen = pick(available)
         _add_entry(plan, day, chosen.id, needed)
         assigned[chosen.id] += weight
+        if is_work_wish(chosen, day, year, month):
+            wish_done[chosen.id] += 1
         try_attach_oncall(chosen, day)
 
     # 5. Rufbereitschaft: jeder Tag eine Person, Ziel je Helfer = genau die
@@ -659,27 +758,35 @@ def generate(plan: MonthPlan, seed: int | None = None,
             # Gleichstand wird anschliessend in Schritt 6 repariert
             available = oncall_candidates(day, active, respect_target=False)
         if not available:
-            # Konfliktstufe wie beim Dienst: Nachrang-Freiwunsch ueberplanen
-            pool = [
+            # Konfliktstufe wie beim Dienst: Freiwunsch ueberplanen, erst
+            # Nachrang, dann Vorrang
+            overridable = [
                 a for a in active
-                if wish_priority(a, day, year, month) == "nachrang"
+                if wish_priority(a, day, year, month) is not None
                 and not is_on_vacation(a, day, year, month)
                 and not _works_on(plan, a.id, day)
                 and not exceeds_consecutive(plan, a.id, day, ON_CALL_KINDS)
                 and not _violates_min_gap(plan, a, day, day, days_in_month)
             ]
-            if pool:
-                pool.sort(key=lambda a: (
+            nachrang = [a for a in overridable
+                        if wish_priority(a, day, year, month) == "nachrang"]
+            vorrang = [a for a in overridable
+                       if wish_priority(a, day, year, month) == "vorrang"]
+            if overridable:
+                nachrang.sort(key=lambda a: (
                     -wish_overhang(a, year, month),
                     oncall_assigned[a.id] - oncall_target[a.id],
                     rng.random(),
+                ))
+                vorrang.sort(key=lambda a: (
+                    oncall_assigned[a.id] - oncall_target[a.id], rng.random()
                 ))
 
                 def place_oncall(a, d=day):
                     _add_entry(plan, d, a.id, ShiftType.ON_CALL)
                     oncall_assigned[a.id] += 1
 
-                _wish_conflict(day, "rb", pool, place_oncall)
+                _wish_conflict(day, "rb", nachrang, vorrang, place_oncall)
             continue
 
         chosen = oncall_pick(available)
