@@ -1,5 +1,5 @@
 {
-  "version": 5,
+  "version": 7,
   "assistants": [
     {
       "id": "f6164e36",
@@ -10,12 +10,23 @@
         "assistant_id": "f6164e36",
         "unavailable_dates": [],
         "vacation_ranges": [],
-        "blocked_dates": [],
-        "blocked_ranges": [],
+        "blocked_dates": [
+          "2026-09-03"
+        ],
+        "blocked_ranges": [
+          [
+            "2026-09-08",
+            "2026-09-10"
+          ]
+        ],
+        "wish_dates": [],
+        "wish_ranges": [],
         "max_consecutive_days": 1,
         "min_block_days": 1,
         "min_gap_days": 0,
-        "oncall_attach": "none"
+        "oncall_attach": "none",
+        "free_wish_quota": null,
+        "work_wish_quota": null
       }
     },
     {
@@ -27,12 +38,23 @@
         "assistant_id": "8cdf0de4",
         "unavailable_dates": [],
         "vacation_ranges": [],
-        "blocked_dates": [],
-        "blocked_ranges": [],
+        "blocked_dates": [
+          "2026-11-07"
+        ],
+        "blocked_ranges": [
+          [
+            "2026-11-03",
+            "2026-11-05"
+          ]
+        ],
+        "wish_dates": [],
+        "wish_ranges": [],
         "max_consecutive_days": 4,
         "min_block_days": 3,
         "min_gap_days": 0,
-        "oncall_attach": "none"
+        "oncall_attach": "none",
+        "free_wish_quota": null,
+        "work_wish_quota": null
       }
     },
     {
@@ -45,11 +67,20 @@
         "unavailable_dates": [],
         "vacation_ranges": [],
         "blocked_dates": [],
-        "blocked_ranges": [],
+        "blocked_ranges": [
+          [
+            "2026-11-22",
+            "2026-11-23"
+          ]
+        ],
+        "wish_dates": [],
+        "wish_ranges": [],
         "max_consecutive_days": 2,
         "min_block_days": 1,
         "min_gap_days": 0,
-        "oncall_attach": "none"
+        "oncall_attach": "none",
+        "free_wish_quota": null,
+        "work_wish_quota": null
       }
     },
     {
@@ -61,12 +92,28 @@
         "assistant_id": "d579723b",
         "unavailable_dates": [],
         "vacation_ranges": [],
-        "blocked_dates": [],
-        "blocked_ranges": [],
+        "blocked_dates": [
+          "2026-11-07",
+          "2026-11-10"
+        ],
+        "blocked_ranges": [
+          [
+            "2026-11-03",
+            "2026-11-04"
+          ],
+          [
+            "2026-11-22",
+            "2026-11-23"
+          ]
+        ],
+        "wish_dates": [],
+        "wish_ranges": [],
         "max_consecutive_days": 1,
         "min_block_days": 1,
         "min_gap_days": 0,
-        "oncall_attach": "none"
+        "oncall_attach": "none",
+        "free_wish_quota": null,
+        "work_wish_quota": null
       }
     },
     {
@@ -76,14 +123,38 @@
       "active": true,
       "constraints": {
         "assistant_id": "f8eeb583",
-        "unavailable_dates": [],
-        "vacation_ranges": [],
+        "unavailable_dates": [
+          "2026-09-08",
+          "2026-09-10",
+          "2026-11-03",
+          "2026-11-10",
+          "2026-11-19"
+        ],
+        "vacation_ranges": [
+          [
+            "2026-11-25",
+            "2026-11-26"
+          ]
+        ],
         "blocked_dates": [],
-        "blocked_ranges": [],
+        "blocked_ranges": [
+          [
+            "2026-09-02",
+            "2026-09-03"
+          ],
+          [
+            "2026-11-04",
+            "2026-11-07"
+          ]
+        ],
+        "wish_dates": [],
+        "wish_ranges": [],
         "max_consecutive_days": 1,
         "min_block_days": 1,
         "min_gap_days": 0,
-        "oncall_attach": "none"
+        "oncall_attach": "none",
+        "free_wish_quota": null,
+        "work_wish_quota": null
       }
     },
     {
@@ -95,12 +166,18 @@
         "assistant_id": "38ffc3ce",
         "unavailable_dates": [],
         "vacation_ranges": [],
-        "blocked_dates": [],
+        "blocked_dates": [
+          "2026-11-07"
+        ],
         "blocked_ranges": [],
+        "wish_dates": [],
+        "wish_ranges": [],
         "max_consecutive_days": 2,
         "min_block_days": 1,
         "min_gap_days": 0,
-        "oncall_attach": "none"
+        "oncall_attach": "none",
+        "free_wish_quota": null,
+        "work_wish_quota": null
       }
     },
     {
@@ -112,12 +189,23 @@
         "assistant_id": "628d6c61",
         "unavailable_dates": [],
         "vacation_ranges": [],
-        "blocked_dates": [],
-        "blocked_ranges": [],
+        "blocked_dates": [
+          "2026-11-13"
+        ],
+        "blocked_ranges": [
+          [
+            "2026-11-19",
+            "2026-11-20"
+          ]
+        ],
+        "wish_dates": [],
+        "wish_ranges": [],
         "max_consecutive_days": 1,
         "min_block_days": 1,
         "min_gap_days": 0,
-        "oncall_attach": "none"
+        "oncall_attach": "none",
+        "free_wish_quota": null,
+        "work_wish_quota": null
       }
     },
     {
@@ -127,14 +215,25 @@
       "active": true,
       "constraints": {
         "assistant_id": "54fe5cd0",
-        "unavailable_dates": [],
-        "vacation_ranges": [],
+        "unavailable_dates": [
+          "2026-11-10"
+        ],
+        "vacation_ranges": [
+          [
+            "2026-11-03",
+            "2026-11-04"
+          ]
+        ],
         "blocked_dates": [],
         "blocked_ranges": [],
+        "wish_dates": [],
+        "wish_ranges": [],
         "max_consecutive_days": 1,
         "min_block_days": 1,
         "min_gap_days": 0,
-        "oncall_attach": "none"
+        "oncall_attach": "none",
+        "free_wish_quota": null,
+        "work_wish_quota": null
       }
     }
   ],
@@ -148,7 +247,9 @@
           "max_consecutive_days": 1,
           "min_block_days": 1,
           "min_gap_days": 0,
-          "oncall_attach": "none"
+          "oncall_attach": "none",
+          "free_wish_quota": null,
+          "work_wish_quota": null
         },
         "8cdf0de4": {
           "min_shifts": null,
@@ -156,7 +257,9 @@
           "max_consecutive_days": 4,
           "min_block_days": 3,
           "min_gap_days": 0,
-          "oncall_attach": "none"
+          "oncall_attach": "none",
+          "free_wish_quota": null,
+          "work_wish_quota": null
         },
         "27416f21": {
           "min_shifts": null,
@@ -164,7 +267,9 @@
           "max_consecutive_days": 2,
           "min_block_days": 1,
           "min_gap_days": 0,
-          "oncall_attach": "none"
+          "oncall_attach": "none",
+          "free_wish_quota": null,
+          "work_wish_quota": null
         },
         "d579723b": {
           "min_shifts": null,
@@ -172,7 +277,9 @@
           "max_consecutive_days": 1,
           "min_block_days": 1,
           "min_gap_days": 0,
-          "oncall_attach": "none"
+          "oncall_attach": "none",
+          "free_wish_quota": null,
+          "work_wish_quota": null
         },
         "f8eeb583": {
           "min_shifts": null,
@@ -180,7 +287,9 @@
           "max_consecutive_days": 1,
           "min_block_days": 1,
           "min_gap_days": 0,
-          "oncall_attach": "none"
+          "oncall_attach": "none",
+          "free_wish_quota": null,
+          "work_wish_quota": null
         },
         "38ffc3ce": {
           "min_shifts": null,
@@ -188,7 +297,9 @@
           "max_consecutive_days": 2,
           "min_block_days": 1,
           "min_gap_days": 0,
-          "oncall_attach": "none"
+          "oncall_attach": "none",
+          "free_wish_quota": null,
+          "work_wish_quota": null
         },
         "628d6c61": {
           "min_shifts": null,
@@ -196,7 +307,9 @@
           "max_consecutive_days": 1,
           "min_block_days": 1,
           "min_gap_days": 0,
-          "oncall_attach": "none"
+          "oncall_attach": "none",
+          "free_wish_quota": null,
+          "work_wish_quota": null
         },
         "54fe5cd0": {
           "min_shifts": null,
@@ -204,7 +317,9 @@
           "max_consecutive_days": 1,
           "min_block_days": 1,
           "min_gap_days": 0,
-          "oncall_attach": "none"
+          "oncall_attach": "none",
+          "free_wish_quota": null,
+          "work_wish_quota": null
         }
       }
     },
@@ -217,7 +332,9 @@
           "max_consecutive_days": 1,
           "min_block_days": 1,
           "min_gap_days": 0,
-          "oncall_attach": "none"
+          "oncall_attach": "none",
+          "free_wish_quota": null,
+          "work_wish_quota": null
         },
         "8cdf0de4": {
           "min_shifts": null,
@@ -225,7 +342,9 @@
           "max_consecutive_days": 4,
           "min_block_days": 3,
           "min_gap_days": 0,
-          "oncall_attach": "none"
+          "oncall_attach": "none",
+          "free_wish_quota": null,
+          "work_wish_quota": null
         },
         "27416f21": {
           "min_shifts": null,
@@ -233,7 +352,9 @@
           "max_consecutive_days": 2,
           "min_block_days": 1,
           "min_gap_days": 0,
-          "oncall_attach": "none"
+          "oncall_attach": "none",
+          "free_wish_quota": null,
+          "work_wish_quota": null
         },
         "d579723b": {
           "min_shifts": null,
@@ -241,7 +362,9 @@
           "max_consecutive_days": 1,
           "min_block_days": 1,
           "min_gap_days": 0,
-          "oncall_attach": "none"
+          "oncall_attach": "none",
+          "free_wish_quota": null,
+          "work_wish_quota": null
         },
         "f8eeb583": {
           "min_shifts": null,
@@ -249,7 +372,9 @@
           "max_consecutive_days": 1,
           "min_block_days": 1,
           "min_gap_days": 0,
-          "oncall_attach": "none"
+          "oncall_attach": "none",
+          "free_wish_quota": null,
+          "work_wish_quota": null
         },
         "38ffc3ce": {
           "min_shifts": null,
@@ -257,7 +382,9 @@
           "max_consecutive_days": 2,
           "min_block_days": 1,
           "min_gap_days": 0,
-          "oncall_attach": "none"
+          "oncall_attach": "none",
+          "free_wish_quota": null,
+          "work_wish_quota": null
         },
         "628d6c61": {
           "min_shifts": null,
@@ -265,7 +392,9 @@
           "max_consecutive_days": 1,
           "min_block_days": 1,
           "min_gap_days": 0,
-          "oncall_attach": "none"
+          "oncall_attach": "none",
+          "free_wish_quota": null,
+          "work_wish_quota": null
         },
         "54fe5cd0": {
           "min_shifts": null,
@@ -273,7 +402,9 @@
           "max_consecutive_days": 1,
           "min_block_days": 1,
           "min_gap_days": 0,
-          "oncall_attach": "none"
+          "oncall_attach": "none",
+          "free_wish_quota": null,
+          "work_wish_quota": null
         }
       }
     }
