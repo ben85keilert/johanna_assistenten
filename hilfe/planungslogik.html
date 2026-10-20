@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Johanna Assistenten – Planungslogik</title>
+<link rel="stylesheet" href="stil.css">
+</head>
+<body>
+<main>
+<nav class="top">
+  <a href="bedienung.html">Bedienung</a>
+  <a href="#inhalt">Inhalt</a>
+</nav>
+
+<h1>Planungslogik – wie der Würfel vergibt</h1>
+<p class="lead">Diese Seite beschreibt, nach welchen Regeln „Neu würfeln" die Tage verteilt, in welcher Reihenfolge, und woran man erkennt, ob die Vergabe fair war. Sie ist bewusst so geschrieben, dass sich jede einzelne Zuteilung nachvollziehen lässt.</p>
+
+<h2 id="inhalt">Inhalt</h2>
+<ol class="toc">
+  <li><a href="#ziel">Was ein fertiger Plan erfüllen muss</a></li>
+  <li><a href="#regeln">Harte und weiche Regeln</a></li>
+  <li><a href="#ablauf">Ablauf eines Würfelns</a></li>
+  <li><a href="#wer">Wer bekommt einen Tag? Die Rangfolge</a></li>
+  <li><a href="#rb">Rufbereitschaft</a></li>
+  <li><a href="#wuensche">Freiwünsche: Vorrang, Nachrang, Konflikt</a></li>
+  <li><a href="#dienstwuensche">Dienstwünsche</a></li>
+  <li><a href="#zufall">Zufall und Wiederholbarkeit</a></li>
+  <li><a href="#pruefen">Fairness prüfen</a></li>
+  <li><a href="#grenzen">Was der Würfel nicht kann</a></li>
+</ol>
+
+<h2 id="ziel">1. Was ein fertiger Plan erfüllen muss</h2>
+<ul>
+  <li>Jeder Tag hat einen <b>Tagesdienst</b>: ein VOLL, oder Tag + Nacht von zwei verschiedenen Personen (zählen je 0,5).</li>
+  <li>Jeder Tag hat eine <b>Rufbereitschaft</b> (RB) von einer <i>anderen</i> Person als der mit Dienst. Pro Person und Tag gibt es entweder Dienst oder RB, nie beides.</li>
+  <li>Jeder Helfer bekommt im Monat <b>genauso viele RB-Tage wie (gewichtete) Dienste</b> – Gleichstand, nicht nur Annäherung (±0,5 bei halben Diensten).</li>
+  <li>Die Dienste sind <b>gleichmäßig verteilt</b>, soweit die Regeln je Helfer es zulassen.</li>
+</ul>
+
+<h2 id="regeln">2. Harte und weiche Regeln</h2>
+<p><b>Harte Regeln</b> werden nie verletzt, auch nicht als Notlösung. Lieber bleibt ein Tag offen (Warnung unter dem Raster) als dass eine harte Regel bricht.</p>
+<table>
+  <tr><th>Regel</th><th>Bedeutung</th></tr>
+  <tr><td>Urlaub</td><td>Die Person ist an dem Tag nie einplanbar, weder Dienst noch RB. Wird unter keinen Umständen überplant.</td></tr>
+  <tr><td>Tages-Exklusivität</td><td>Pro Person und Tag entweder Dienst oder RB.</td></tr>
+  <tr><td>Max. Dienste (ausdrücklich gesetzt)</td><td>Hartes Maximum ohne Toleranz. „Auto" ist dagegen weich.</td></tr>
+  <tr><td>Max. Folge</td><td>Höchstens so viele Tage am Stück, Dienst und RB je getrennt gezählt.</td></tr>
+  <tr><td>Abstand</td><td>Mindestens so viele freie Tage zwischen zwei Einsatzblöcken derselben Person (Dienst und RB zusammen; direkt angrenzende Tage gehören zum selben Block).</td></tr>
+  <tr><td>Manuelles und Fixiertes</td><td>Bleibt immer stehen und zählt für alle Ziele mit.</td></tr>
+</table>
+<p><b>Weiche Regeln</b> sind Ziele, die der Würfel anstrebt und bei Bedarf in fester Reihenfolge lockert:</p>
+<table>
+  <tr><th>Ziel</th><th>Lockerung, wenn ein Tag sonst offen bliebe</th></tr>
+  <tr><td>Faire Verteilung („Auto"-Soll = Tage im Monat ÷ Helfer + 1,5 Toleranz)</td><td>Wird ignoriert.</td></tr>
+  <tr><td>Min. Dienste</td><td>Verteilungsziel: wer darunter liegt, kommt zuerst dran. Keine Garantie.</td></tr>
+  <tr><td>RB = Dienste</td><td>Wird zum Füllen offener RB-Tage überschritten, danach gleicht eine Ausgleichsrunde aus.</td></tr>
+  <tr><td>Min. Block (weite Anreise)</td><td>Blockfahrer werden für einzelne Resttage nur als Notlösung herangezogen.</td></tr>
+  <tr><td>Dienstwünsche</td><td>Bevorzugung, keine Pflicht; nimmt nie einem anderen Tag die Abdeckung.</td></tr>
+  <tr><td>Freiwunsch mit Nachrang (über dem Kontingent)</td><td>Darf als vorletzte Stufe überplant werden – gemeldet als Konflikt.</td></tr>
+  <tr><td>Freiwunsch mit Vorrang (innerhalb des Kontingents)</td><td>Darf nur als allerletzte Stufe überplant werden, wenn kein Nachrang-Wunsch den Tag füllen kann – gemeldet als Konflikt.</td></tr>
+</table>
+
+<h2 id="ablauf">3. Ablauf eines Würfelns</h2>
+<ol class="steps">
+  <li><b>Aufräumen.</b> Alle Würfel-Einträge, die nicht fixiert sind, werden entfernt. Manuelles und Fixiertes bleibt. Nicht fixierte Kandidaten-Wahlen werden zurückgesetzt.</li>
+  <li><b>Zählen.</b> Je Helfer: schon vergebene Dienste (VOLL = 1, Tag/Nacht = 0,5), RB-Tage und erfüllte Dienstwünsche. Daraus die „Auto"-Sollgrenze: Tage im Monat ÷ aktive Helfer + 1,5.</li>
+  <li><b>Kandidatenwahl Dienst.</b> Tage mit mehreren manuellen VOLL-Vorschlägen bekommen zuerst einen Gewählten – nach denselben Regeln wie unten (unter dem Minimum zuerst, dann wenigste Dienste, dann Zufall). Ein ausdrückliches Max bleibt hart, die Auto-Grenze bevorzugt nur.</li>
+  <li><b>Dienstblöcke</b> für Helfer mit Min. Block &gt; 1 (zufällige Reihenfolge): solange das Soll es zulässt, ein zusammenhängender VOLL-Block von Min.-Block-Länge auf komplett freien Tagen; mit „RB anhängen" der gleich lange RB-Block direkt daneben. Jeder mögliche Start muss alle harten Regeln erfüllen; liegt ein Block ganz auf Dienstwunsch-Tagen, wird er bevorzugt.</li>
+  <li><b>Dienstwünsche.</b> Für jeden noch leeren Tag, den jemand als Dienstwunsch markiert hat: unter den Helfern mit offenem Kontingent, die alle harten Regeln erfüllen und unter ihrer Sollgrenze liegen, bekommt den Tag, wer anteilig am wenigsten seiner Wünsche erfüllt hat; dann wer die wenigsten Dienste hat; dann Zufall.</li>
+  <li><b>Restliche Diensttage</b> (zufällige Tagesreihenfolge). Für jeden nicht abgedeckten Tag:
+    <ol type="a">
+      <li>Kandidaten = Einzeltag-Helfer, die alle harten Regeln erfüllen und unter ihrer Sollgrenze liegen.</li>
+      <li>Leer? Blockfahrer als Notlösung dazu.</li>
+      <li>Immer noch leer? Auto-Sollgrenze lockern (hart bleiben: ausdrückliches Max, Abstand, Folge, Urlaub, alle Freiwünsche).</li>
+      <li>Immer noch leer? <b>Konfliktstufe</b>: einen Freiwunsch überplanen – erst Nachrang (größter Überhang über dem Kontingent, dann wenigste Dienste), gibt es keinen, Vorrang (wenigste Dienste). Als Konflikt gemeldet.</li>
+      <li>Auch das nicht möglich (nur Urlaub oder harte Grenzen im Weg)? Der Tag bleibt offen.</li>
+    </ol>
+    Aus den Kandidaten wählt der Würfel: 1. wer unter seinem Min. Dienste liegt, 2. wer die wenigsten Dienste hat, 3. Zufall. Danach wird bei „RB anhängen" die RB direkt daneben versucht.</li>
+  <li><b>Rufbereitschaft.</b> Ziel je Helfer = eigene Dienstzahl. Zuerst Kandidatenwahl RB (wie bei Dienst, nie am eigenen Diensttag), dann RB-Blöcke für Blockfahrer, dann die restlichen Tage einzeln: wer am weitesten unter seinem RB-Ziel liegt, zuerst. Bleibt ein Tag offen, wird das RB-Ziel gelockert, dann die Konfliktstufe wie oben.</li>
+  <li><b>Ausgleichsrunde.</b> Helfer über ihrem RB-Ziel geben Würfel-RB-Tage an Helfer unter dem Ziel ab, solange alle harten Regeln es zulassen.</li>
+</ol>
+<p>Ergebnis: der Plan plus die Liste der Konflikte für den Dialog. Der Validator meldet unter dem Raster alles, was nicht aufging.</p>
+
+<h2 id="wer">4. Wer bekommt einen Tag? Die Rangfolge</h2>
+<p>Bei der Frage „wer bekommt diesen Tag?" gilt, in dieser Reihenfolge:</p>
+<ol class="steps">
+  <li><b>Manuell und fixiert schlägt alles.</b> Fixpunkte werden nie angetastet.</li>
+  <li><b>Kandidaten zuerst.</b> Trägt der Tag manuelle Vorschläge, wird unter ihnen gewählt, bevor der allgemeine Pool drankommt.</li>
+  <li><b>Harte Regeln filtern</b> (Urlaub, Exklusivität, Max-Grenzen, Folge, Abstand). Freiwünsche gelten bis zur Konfliktstufe ebenfalls als gesperrt.</li>
+  <li><b>Dienstwünsche</b>: wer den Tag als Dienstwunsch markiert hat und sein Kontingent noch nicht erfüllt hat, bekommt ihn vor dem allgemeinen Pool.</li>
+  <li><b>Unter dem Minimum</b> liegende Helfer haben Vorrang.</li>
+  <li><b>Wenigste Dienste zuerst.</b> Das ist der Kern der Fairness: in jedem Schritt bekommt den Tag, wer bisher am wenigsten hat.</li>
+  <li><b>Zufall</b> (mit Seed wiederholbar) entscheidet Gleichstände.</li>
+  <li><b>Blockfahrer</b> werden für Einzeltage nur als Notlösung verwendet.</li>
+  <li><b>Lockerung</b> der weichen Ziele, zuletzt die Konfliktstufe. Prioritätsleiter: Urlaub (zwingend) &gt; Kontingent-Wünsche (Vorrang) &gt; Zusatz-Wünsche (Nachrang) &gt; Fairness.</li>
+</ol>
+
+<h2 id="rb">5. Rufbereitschaft</h2>
+<ul>
+  <li>Eine Person je Tag, nie die Person mit Dienst an dem Tag.</li>
+  <li>Je Helfer genauso viele RB-Tage wie Dienste; bei halben Diensten (z. B. 4,5) darf auf- oder abgerundet werden.</li>
+  <li>Max. Folge und Min. Block gelten auch für RB, aber getrennt gezählt: 3 Tage Dienst + 3 Tage RB hintereinander sind erlaubt. Der Abstand zählt dagegen beides zusammen – Dienst und RB direkt hintereinander sind ein Block.</li>
+  <li>„RB anhängen" legt die RB als gleich langen Block direkt vor, nach oder (bei „Beides") auf beide Seiten des Dienstblocks; die Gesamtzahl bleibt gleich, damit RB = Dienste aufgeht.</li>
+</ul>
+
+<h2 id="wuensche">6. Freiwünsche: Vorrang, Nachrang, Konflikt</h2>
+<p>Ein Wunsch-Tag (frei) sperrt die Person wie Urlaub – solange es geht. Das Kontingent „Freiwünsche" entscheidet, wie fest ein Wunsch ist:</p>
+<ul>
+  <li><b>„Alle"</b> (Standard): jeder Wunsch-Tag hat Vorrang.</li>
+  <li><b>Zahl N</b>: die chronologisch ersten N Wunsch-Tage des Monats haben <b>Vorrang</b>, alle weiteren <b>Nachrang</b>.</li>
+</ul>
+<p>Alle Tage müssen besetzt sein. Deshalb die Stufenfolge, wenn ein Tag sonst offen bliebe:</p>
+<ol class="steps">
+  <li>Erst wird alles ohne Wunschverletzung gelöst (auch mit gelockerter Auto-Grenze und Blockfahrern als Notlösung).</li>
+  <li>Reicht das nicht, wird die Person genommen, die ihr Kontingent überschritten hat: Nachrang-Wünsche, bevorzugt wer den <b>größten Überhang</b> über seinem Kontingent hat, dann wer die wenigsten Dienste hat. So trägt die Last, wer am meisten Zusatzwünsche hat.</li>
+  <li>Reicht auch das nicht, wird als allerletzte Stufe ein Vorrang-Wunsch übergangen, bevorzugt bei der Person mit den wenigsten Diensten.</li>
+</ol>
+<p>Jede dieser Entscheidungen erscheint im <b>Konflikt-Dialog</b> mit allen überplanbaren Personen (Nachrang vor Vorrang, beschriftet) und „Tag offen lassen". Urlaub wird dabei nie angetastet. Ein überplanter Wunsch bleibt eingetragen und sichtbar (Dreieck in der Zelle, Warnung unter dem Raster) – man sieht also immer, wer nachgegeben hat.</p>
+
+<h2 id="dienstwuensche">7. Dienstwünsche</h2>
+<p>Dienstwunsch-Tage sind Tage, an denen jemand gern arbeitet; das Kontingent „Dienstwünsche" sagt, wie viele Dienste auf diese Tage fallen sollen („3 Dienste an 7 Möglichkeiten"; „Alle" = so viele wie möglich). Der Würfel vergibt diese Dienste <b>vor</b> der allgemeinen Füllung, aber nur im Rahmen aller harten Regeln und der fairen Sollgrenze. Konkurrieren mehrere um denselben Tag, zählt der Anteil: wer von seinen Wünschen bisher am wenigsten erfüllt bekam, ist zuerst dran; dann wer insgesamt die wenigsten Dienste hat. Ein Dienstwunsch kann also nie dazu führen, dass jemand anderes zu wenig oder ein Tag gar nicht besetzt wird. Weniger erfüllte Wünsche als gewünscht erscheinen als Hinweis unter dem Raster – das ist keine Regelverletzung, sondern Information.</p>
+
+<h2 id="zufall">8. Zufall und Wiederholbarkeit</h2>
+<p>Der Zufall entscheidet nur Gleichstände und die Reihenfolge, in der Tage bearbeitet werden. Mit „Deterministisch" und einem Seed ist das Ergebnis wiederholbar: gleicher Seed, gleiche Fixpunkte, gleiche Einstellungen ergeben denselben Plan. Ein anderer Seed ergibt eine andere, gleich faire Variante. Der Konflikt-Dialog nutzt das: ändert man eine Entscheidung, läuft dasselbe Würfeln mit derselben Zufallsfolge noch einmal, nur mit der geänderten Antwort.</p>
+
+<h2 id="pruefen">9. Fairness prüfen</h2>
+<p>Woran man nach dem Würfeln sieht, ob es fair zuging:</p>
+<ul>
+  <li><b>Belegt-Spalte und Zusammenfassung</b>: die Tupel <code>VOLL | Tag | Nacht | RB</code> je Helfer. Bei „Auto" sollten die Dienstzahlen höchstens um 1–2 auseinanderliegen; Abweichungen erklären sich aus Urlaub, Wünschen, Max-Grenzen oder Blöcken. RB sollte je Helfer gleich der Dienstzahl sein.</li>
+  <li><b>Warnungen</b> unter dem Raster: jede Abweichung vom Soll, jeder Ungleichstand, jeder überplante Wunsch steht dort ausdrücklich. Keine Warnung = alle Regeln erfüllt.</li>
+  <li><b>Ursachen sehen</b>: Urlaub (U), Wunsch (/) und Dienstwunsch (+) stehen direkt im Raster; das Dreieck zeigt überplante Wünsche; der Punkt unterscheidet Würfel-Einträge von Fixpunkten. Eine Person mit vielen Sperren bekommt zwangsläufig weniger Tage – oder dieselben Tage immer wieder.</li>
+  <li><b>Min. Dienste</b> setzen, wenn jemand garantiert mindestens X Dienste braucht: der Würfel zieht diese Person dann zuerst, solange es die Regeln erlauben; geht es nicht auf, steht es als Hinweis da.</li>
+  <li><b>Andere Variante</b>: Seed ändern und neu würfeln. Gefällt eine Verteilung, fixieren und den Rest neu würfeln.</li>
+  <li><b>Monatsgrenze</b>: Folgen und Abstände werden nur innerhalb des Monats geprüft. Wer am Monatsende Dienst hat, kann am 1. des Folgemonats wieder drankommen – dort ggf. per Fixpunkt oder Urlaub vorbeugen.</li>
+</ul>
+
+<h2 id="grenzen">10. Was der Würfel nicht kann</h2>
+<ul>
+  <li>Er ist ein <b>gieriger</b> Verteiler: Tag für Tag die bislang fairste Wahl, kein Optimierer über den ganzen Monat. Das macht ihn vorhersehbar und schnell, aber er findet nicht immer eine Lösung, die ein Mensch durch Umschichten noch fände. Dafür gibt es Fixpunkte und erneutes Würfeln.</li>
+  <li>Er kennt keine Wochenend-Fairness und keine Feiertage (grau ist nur Anzeige).</li>
+  <li>Er sieht nur den geöffneten Monat; Abwesenheiten gelten zwar monatsübergreifend, Folgen und Abstände aber nicht.</li>
+</ul>
+
+<p style="margin-top:40px;color:var(--muted);font-size:.9rem">Zurück zur <a href="bedienung.html">Bedienung</a></p>
+</main>
+</body>
+</html>

@@ -366,6 +366,19 @@ bis alles bestätigt ist. **Urlaube sind zwingend, Wünsche nicht.** Ein
 trägt eine Warnmarkierung und unter dem Raster erscheint eine Warnung
 („Freiwunsch überplant").
 
+### Menü „Hilfe"
+
+- **Bedienung…** (`F1`) und **Planungslogik…** öffnen die Hilfe im Browser:
+  `hilfe/bedienung.html` (wie wird das Programm bedient, mit Screenshots
+  aller Widgets, Import/Export, Rückmeldungen) und `hilfe/planungslogik.html`
+  (nach welchen Regeln und in welcher Reihenfolge der Würfel vergibt, woran
+  man Fairness erkennt). Die Screenshots entstehen aus den Beispieldaten
+  (`tools/make_screenshots.py`) und werden nach Oberflächenänderungen neu
+  erzeugt. Eine angepasste Hilfe im Ordner `hilfe` neben dem Programm hat
+  Vorrang vor der mitgelieferten.
+- **Info / Version…** zeigt Version, den Link zum Git-Repository (Quellcode,
+  Releases) sowie die Pfade des Datenordners und des Ablageordners.
+
 ## Datenhaltung
 
 Alle Daten liegen als **JSON** im Ordner `data/` neben dem Programm. Beim Start wird

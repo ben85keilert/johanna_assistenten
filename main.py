@@ -235,6 +235,24 @@ class JohannaApp:
         update_action.triggered.connect(self.check_updates_manual)
         settings_menu.addAction(update_action)
 
+        # Hilfe: Anleitung und Planungslogik als HTML im Browser, Info-Dialog
+        from ui.help import open_help, show_about
+        from persistence.json_store import DATA_DIR
+        help_menu = menubar.addMenu("Hilfe")
+        manual_action = QAction("Bedienung...", self.window)
+        manual_action.setShortcut("F1")
+        manual_action.triggered.connect(lambda: open_help(self.window, "bedienung"))
+        help_menu.addAction(manual_action)
+        logic_action = QAction("Planungslogik...", self.window)
+        logic_action.triggered.connect(lambda: open_help(self.window, "planungslogik"))
+        help_menu.addAction(logic_action)
+        help_menu.addSeparator()
+        about_action = QAction("Info / Version...", self.window)
+        about_action.triggered.connect(
+            lambda: show_about(self.window, DATA_DIR, inbox_root())
+        )
+        help_menu.addAction(about_action)
+
     def _setup_scheme_menu(self, menu):
         """Einstellungen > Farbschema: vier Paletten, je hell und dunkel."""
         group = QActionGroup(self.window)

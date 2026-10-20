@@ -20,6 +20,7 @@ Eine PySide6-Anwendung zur Verwaltung und Planung von Assistentendiensten für e
 - **Export:** CSV, Excel (mit Farben), PDF (Hochformat, ohne Urlaube/Wünsche), Notizen als Text
 - **Rückmeldungen der Helfer:** HTML-Formular zum Verschicken (offline, auch am Handy) und Import der Antworten (Zwischenablage, Dateien, Ablageordner `Formularantworten` neben dem Programmordner)
 - **Persistierung:** JSON-Speicherung / -Laden
+- **Hilfe:** Menü Hilfe → Bedienung (mit Screenshots) und Planungslogik, als HTML im Ordner `hilfe/` (Screenshots: `QT_QPA_PLATFORM=offscreen uv run python tools/make_screenshots.py`)
 
 ## Installation
 
@@ -117,7 +118,7 @@ einem Windows-Rechner oder automatisch über GitHub Actions.
    ```
 4. Build starten:
    ```bat
-   uv run pyinstaller --noconsole --onedir --name JohannaAssistenten --add-data "vorlagen;vorlagen" main.py
+   uv run pyinstaller --noconsole --onedir --name JohannaAssistenten --add-data "vorlagen;vorlagen" --add-data "hilfe;hilfe" main.py
    ```
 5. Das fertige Programm liegt in `dist\JohannaAssistenten\` —
    den ganzen Ordner kopieren und `JohannaAssistenten.exe` starten.
@@ -164,7 +165,7 @@ Voraussetzungen: uv und die Qt-Systembibliotheken aus dem Abschnitt
    ```
 2. Build starten:
    ```bash
-   uv run pyinstaller --noconsole --onedir --name JohannaAssistenten --add-data "vorlagen:vorlagen" main.py
+   uv run pyinstaller --noconsole --onedir --name JohannaAssistenten --add-data "vorlagen:vorlagen" --add-data "hilfe:hilfe" main.py
    ```
 3. Das fertige Programm liegt in `dist/JohannaAssistenten/` — den ganzen Ordner
    kopieren und `./JohannaAssistenten` darin starten. Der Ordner ist ca. 220 MB

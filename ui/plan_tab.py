@@ -108,7 +108,7 @@ class PlanTab(QWidget):
         # Ansichtswahl (MainWindow holt sie ueber control_bar_widget)
         tools_layout = QHBoxLayout()
 
-        stamp_box = QGroupBox("Stempel")
+        self.stamp_box = stamp_box = QGroupBox("Stempel")
         stamp_layout = QHBoxLayout()
         self.stamp_group = QButtonGroup(self)
         self.stamp_group.setExclusive(False)

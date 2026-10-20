@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Johanna Assistenten – Bedienung</title>
+<link rel="stylesheet" href="stil.css">
+</head>
+<body>
+<main>
+<nav class="top">
+  <a href="#inhalt">Inhalt</a>
+  <a href="planungslogik.html">Planungslogik (wie der Würfel vergibt)</a>
+</nav>
+
+<h1>Johanna Assistenten – Bedienung</h1>
+<p class="lead">Das Programm verteilt die Tage eines Monats fair auf das Assistenz-Team: jeder Tag braucht einen Tagesdienst (oder Tag + Nacht) und eine Rufbereitschaft. Man setzt Fixpunkte von Hand, lässt den Rest würfeln, fixiert, was gefällt, und würfelt den Rest neu. Diese Seite erklärt die Bedienung; die Regeln der Vergabe stehen in der <a href="planungslogik.html">Planungslogik</a>.</p>
+
+<h2 id="inhalt">Inhalt</h2>
+<ol class="toc">
+  <li><a href="#fenster">Das Fenster</a></li>
+  <li><a href="#monat">Monat wählen</a></li>
+  <li><a href="#steuerleiste">Steuerleiste</a></li>
+  <li><a href="#dienstplan">Tab „Dienstplan"</a></li>
+  <li><a href="#urlaub">Tab „Urlaub und Notizen"</a></li>
+  <li><a href="#team">Tab „Team"</a></li>
+  <li><a href="#einstellungen">Einstellungen</a></li>
+  <li><a href="#datei">Menü „Datei"</a></li>
+  <li><a href="#rueckmeldung">Rückmeldungen der Helfer</a></li>
+  <li><a href="#speichern">Speichern und Datensicherheit</a></li>
+  <li><a href="#updates">Updates</a></li>
+  <li><a href="#tasten">Tastenkürzel</a></li>
+</ol>
+
+<h2 id="fenster">1. Das Fenster</h2>
+<figure><img src="bilder/hauptfenster.png" alt="Hauptfenster mit Dienstplan-Tab"><figcaption>Von oben: Menü, Steuerleiste, Tab-Zeile mit Monatswähler und Ansicht, der aktive Tab, Statuszeile.</figcaption></figure>
+<ul>
+  <li><b>Menü</b>: Datei (Speichern, Exporte, Import, Datensicherung), Einstellungen (Farben, Farbschema, Updates), Hilfe.</li>
+  <li><b>Steuerleiste</b>: übergroße Tasten für das zuletzt angeklickte Wertefeld, rechts die Gruppe „Würfeln" (nur im Dienstplan).</li>
+  <li><b>Tab-Zeile</b>: die drei Tabs, rechts der gemeinsame Monatswähler und (im Dienstplan) die Ansicht.</li>
+  <li><b>Statuszeile</b>: Meldungen wie „Automatisch gespeichert" oder das Ergebnis eines Imports.</li>
+</ul>
+<p>Der Fenstertitel zeigt den geöffneten Monat; ein <code>*</code> dahinter heißt: Änderungen sind noch nicht geschrieben (das erledigt der Autosave in spätestens 15 Sekunden).</p>
+
+<h2 id="monat">2. Monat wählen</h2>
+<figure class="small"><img src="bilder/monatswaehler.png" alt="Jahr- und Monatsauswahl"><figcaption>Ein Monat für alle Tabs.</figcaption></figure>
+<p>Jahr und Monat gelten für alle drei Tabs gleichzeitig. Beim Wechsel wird der bisherige Monat gespeichert und der neue geladen; ein noch nicht vorhandener Monat beginnt leer, mit dem aktuellen Team. Beim nächsten Start öffnet sich der zuletzt bearbeitete Monat.</p>
+
+<h2 id="steuerleiste">3. Steuerleiste</h2>
+<figure><img src="bilder/steuerleiste.png" alt="Steuerleiste"><figcaption>◀ ▶ springen zum vorherigen/nächsten Wertefeld, ▼ ▲ ändern seinen Wert. Rechts die Würfel-Gruppe.</figcaption></figure>
+<p>Alle Zahlenwerte im Programm (Soll-Dienste, Max. Folge, Kontingente …) sind Felder mit Minus/Plus-Tasten. Klickt man eines an, zeigt die Steuerleiste es groß und man kann es mit ▲/▼ verstellen (gedrückt halten zählt weiter). ◀/▶ wandern durch alle Felder des aktiven Tabs, ohne die kleinen Tasten treffen zu müssen.</p>
+
+<h2 id="dienstplan">4. Tab „Dienstplan"</h2>
+
+<h3>Das Raster</h3>
+<figure><img src="bilder/raster.png" alt="Planraster"><figcaption>Zeile = Helfer, Spalte = Tag. Links Soll Max / Soll Min und die Spalte „Belegt" (VOLL | Tag | Nacht | RB). Hier in der zweigeteilten Ansicht: die zweite Monatshälfte steht unter der ersten.</figcaption></figure>
+<p>Was eine Zelle zeigt:</p>
+<dl class="sym">
+  <dt><span class="swatch" style="background:var(--full)"></span>VOLL, <span class="swatch" style="background:var(--tag)"></span>Tag, <span class="swatch" style="background:var(--nacht)"></span>Nacht, <span class="swatch" style="background:var(--rb)"></span>RB</dt>
+  <dd>Tagesdienst, halber Dienst (Tag-Hälfte bzw. Nacht-Hälfte, zählt je 0,5), Rufbereitschaft. Jede Art hat ihre Farbe (Einstellungen → Farben).</dd>
+  <dt>Kräftig oder blass</dt>
+  <dd>Kräftig = fest (von Hand gestempelt oder fixiert). Blass mit <b>Punkt</b> oben links = vom Würfel vergeben, noch in Planung – beim nächsten Würfeln wird es neu verteilt.</dd>
+  <dt>🔒 Schloss</dt>
+  <dd>Fixiert: übersteht jedes Neuwürfeln.</dd>
+  <dt><span class="swatch" style="background:var(--urlaub)"></span>U</dt>
+  <dd>Urlaub. Die Person wird an dem Tag nie eingeplant.</dd>
+  <dt><span class="swatch" style="background:var(--wunsch)"></span>/</dt>
+  <dd>Wunsch (frei): die Person möchte frei haben. Wird respektiert, kann aber im Notfall überplant werden (siehe Planungslogik). Ein kleines Dreieck unten rechts in einer belegten Zelle heißt: hier wurde ein Wunsch überplant.</dd>
+  <dt><span class="swatch" style="background:var(--dienstwunsch)"></span>+</dt>
+  <dd>Dienstwunsch: die Person möchte an dem Tag gern arbeiten. Liegt ein Dienst darauf, steht das „+" klein in der Ecke (Wunsch erfüllt).</dd>
+  <dt>VOLL? mit gestricheltem Rahmen</dt>
+  <dd>Kandidat: mehrere Personen sind für denselben Dienst vorgeschlagen, einer wird gewählt (siehe unten).</dd>
+  <dt>📝</dt>
+  <dd>Der Tag hat eine Notiz (im Tageskopf und bei allen an dem Tag Eingeteilten). Der Text erscheint als Tooltip und in der Zeile unter dem Raster, sobald eine Zelle des Tages angeklickt ist.</dd>
+  <dt>Graue Spalten</dt>
+  <dd>Wochenende oder bayerischer Feiertag (nur Anzeige, keine Regel).</dd>
+</dl>
+
+<h3>Stempel</h3>
+<figure><img src="bilder/stempel.png" alt="Stempelleiste"><figcaption>Ein Stempel wählen, dann Zellen anklicken.</figcaption></figure>
+<table>
+  <tr><th>Stempel</th><th>Wirkung beim Klick auf eine Zelle</th></tr>
+  <tr><td>Tagesdienst, Tag, Nacht, Rufbereitschaft</td><td>Setzt den Dienst – gestempelte Dienste sind automatisch <b>fixiert</b>. Derselbe Stempel noch einmal entfernt ihn. Ein Würfel-Vorschlag einer anderen Person, der dieselbe Abdeckung liefern würde, weicht.</td></tr>
+  <tr><td>Urlaub, Wunsch, Dienstwunsch</td><td>Setzt bzw. entfernt die Tagesart. Ein Tag hat je Person nur eine davon. Ein Würfel-Eintrag weicht Urlaub/Wunsch, ein fester Eintrag nur mit „Überschreiben". Zusammenhängende Tage werden zu Zeiträumen (Tab „Urlaub und Notizen").</td></tr>
+  <tr><td>Notiz</td><td>Öffnet die Tagesnotiz (gilt für den Tag, nicht für die Person).</td></tr>
+  <tr><td>Fixieren</td><td>Fixiert einen Eintrag bzw. löst die Fixierung. Bei einem Kandidaten: feste Wahl.</td></tr>
+  <tr><td>Löschen</td><td>Entfernt jeden Eintrag, auch fixierte.</td></tr>
+  <tr><td>Überschreiben (Kästchen)</td><td>Aus (Standard): Einträge eines anderen Typs bleiben unangetastet. An: der Stempel ersetzt sie.</td></tr>
+</table>
+<p><b>Mehrere Zellen auf einmal</b>: mit <kbd>Strg</kbd>- oder <kbd>Umschalt</kbd>-Klick markieren, dann Rechtsklick. Das Menü bietet alle Stempel für die ganze Auswahl, dazu „Kandidat fest wählen" und „Notiz bearbeiten".</p>
+
+<h3>Kandidaten: mehrere Personen für einen Dienst</h3>
+<p>Für Tagesdienst und Rufbereitschaft dürfen mehrere Personen auf denselben Tag gestempelt werden. Hat ein Tag genau einen manuellen Eintrag, ist er fest. Stempelt man denselben Typ für eine zweite Person, werden beide zu <b>Kandidaten</b> (blass, „?", gestrichelt): der Tag ist wieder „zu wählen". <b>Neu würfeln</b> wählt einen davon nach den Fairness-Regeln (die Wahl ist wie ein Würfel-Eintrag markiert), per Rechtsklick → „Kandidat fest wählen" oder mit dem Fixieren-Stempel entscheidet man selbst. Nicht gewählte Kandidaten zählen nirgends mit. Entfernt man alle bis auf einen, wird dieser wieder ein normaler fester Eintrag.</p>
+
+<h3>Würfeln</h3>
+<figure class="small"><img src="bilder/wuerfeln.png" alt="Würfel-Gruppe"><figcaption>Die Gruppe sitzt rechts in der Steuerleiste.</figcaption></figure>
+<ol class="steps">
+  <li><b>Fixpunkte stempeln</b> (z. B. „Martha kommt am 1.–2. VOLL").</li>
+  <li><b>Neu würfeln</b> füllt alle übrigen Tage nach den Regeln der <a href="planungslogik.html">Planungslogik</a>. Würfel-Einträge sind blass mit Punkt.</li>
+  <li>Was gefällt, <b>fixieren</b>; dann wieder würfeln – nur nicht fixierte Würfel-Einträge werden neu verteilt. Manuelles bleibt immer stehen.</li>
+  <li><b>Zurücksetzen</b> löscht alle nicht fixierten Würfel-Einträge; Manuelles bleibt.</li>
+</ol>
+<p><b>Seed und Deterministisch</b>: mit „Deterministisch" ergeben gleicher Seed und gleiche Fixpunkte immer denselben Plan (reproduzierbar, Seed ändern = andere Variante). Ohne „Deterministisch" fällt jeder Klick anders aus.</p>
+
+<h3>Konflikt-Dialog</h3>
+<figure class="small"><img src="bilder/konflikt_dialog.png" alt="Konflikt-Dialog"><figcaption>Erscheint nach dem Würfeln, wenn ein Tag nur durch Überplanen eines Wunsches zu füllen war.</figcaption></figure>
+<p>Urlaub ist zwingend, Wünsche sind es nicht. Ließ sich ein Tag nur besetzen, indem jemand an einem Wunsch-Tag eingeplant wurde, zeigt der Dialog diese Entscheidungen: Tag, Art (Dienst oder Rufbereitschaft) und eine Auswahl mit dem Vorschlag vorausgewählt, anderen überplanbaren Personen (zuerst solche mit Wünschen über ihrem Kontingent, dann innerhalb) und „Tag offen lassen". <b>Übernehmen</b> wendet die Wahl an (dabei wird mit demselben Seed neu gewürfelt; neue Konflikte erscheinen erneut), <b>Vorschläge behalten</b> lässt es, wie es ist. Ein überplanter Wunsch bleibt sichtbar eingetragen und wird unter dem Raster gemeldet.</p>
+
+<h3>Zusammenfassung und Warnungen</h3>
+<figure><img src="bilder/zusammenfassung.png" alt="Zusammenfassung"><figcaption>Je Helfer die belegten Dienste als VOLL | Tag | Nacht | RB und das Soll.</figcaption></figure>
+<figure><img src="bilder/warnungen.png" alt="Warnungen"><figcaption>Darunter alles, was noch nicht aufgeht.</figcaption></figure>
+<table>
+  <tr><th>Meldung</th><th>Bedeutung</th></tr>
+  <tr><td>Unbesetzte Tage / nur halb abgedeckte Tage</td><td>Es fehlt ein Tagesdienst bzw. die zweite Hälfte (Tag/Nacht).</td></tr>
+  <tr><td>Tage ohne Rufbereitschaft</td><td>Noch niemand in RB.</td></tr>
+  <tr><td>Tag doppelt besetzt / 2 Rufbereitschaften</td><td>Mehr Abdeckung als nötig, z. B. von Hand neben einem fixierten Würfel-Eintrag.</td></tr>
+  <tr><td>X Dienste (max. Y) / nur X Dienste (min. Y)</td><td>Soll-Spanne des Helfers verletzt.</td></tr>
+  <tr><td>X Rufbereitschaften bei Y Diensten (muss gleich sein)</td><td>Jeder soll genauso viele RB-Tage wie Dienste haben (±0,5 bei halben Diensten).</td></tr>
+  <tr><td>… Tage am Stück (max. …) / nur … Tag(e) am Stück (kommt mind. …)</td><td>Folge zu lang bzw. für Helfer mit weiter Anreise zu kurz.</td></tr>
+  <tr><td>nur … freie Tage zwischen den Einsätzen</td><td>Mindestabstand unterschritten (nur von Hand möglich).</td></tr>
+  <tr><td>Urlaub überplant / Freiwunsch überplant</td><td>Ein Eintrag liegt auf einem Urlaubs- bzw. Wunsch-Tag.</td></tr>
+  <tr><td>X von Y Diensten an Dienstwunsch-Tagen</td><td>Weniger Dienstwünsche erfüllt als gewünscht (Hinweis, keine Regelverletzung).</td></tr>
+  <tr><td>mehrere Kandidaten, keiner gewählt</td><td>Der Tag wartet auf eine Wahl (Würfeln oder von Hand).</td></tr>
+  <tr><td>Einträge eines nicht (mehr) vorhandenen Helfers</td><td>Reste eines entfernten Helfers – einfach löschen.</td></tr>
+</table>
+
+<h3>Ansicht</h3>
+<p>„Breit" zeigt den Monat in einer Zeile, „Zweigeteilt" die zweite Hälfte unter der ersten (größere Zellen). Die Wahl wird gemerkt.</p>
+
+<h2 id="urlaub">5. Tab „Urlaub und Notizen"</h2>
+<figure><img src="bilder/urlaub_tab.png" alt="Tab Urlaub und Notizen"><figcaption>Links die Helfer, in der Mitte der Monatskalender, rechts die Liste der Einträge bzw. die Notizen.</figcaption></figure>
+<ul>
+  <li><b>Helfer-Buttons</b>: Klick = nur diese Person, <kbd>Strg</kbd>+Klick = mehrere, „Alle" = alle. Für die gewählten Helfer wird angezeigt und eingetragen.</li>
+  <li><b>Kalender</b> in Wochenform. Bei einer Person: Urlaub <span class="swatch" style="background:var(--urlaub)"></span>, Wunsch <span class="swatch" style="background:var(--wunsch)"></span>, Dienstwunsch <span class="swatch" style="background:var(--dienstwunsch)"></span>. Bei mehreren: die Namen mit U/W/D davor. 📝 = Notiz, heute ist fett.</li>
+  <li><b>Eintragen</b>: Stempel Urlaub | Wunsch | Dienstwunsch | Löschen wählen und Tage anklicken (Klick setzt oder entfernt; haben alle gewählten Helfer den Tag schon, wird er bei allen entfernt). Mehrere Tage mit <kbd>Strg</kbd>/<kbd>Umschalt</kbd> markieren, dann Rechtsklick.</li>
+  <li><b>Liste „Abwesenheiten/Wünsche"</b>: alle Einträge der gewählten Helfer, chronologisch und monatsübergreifend, Zeiträume und Einzeltage, mit [Wunsch] bzw. [Dienstwunsch]. Filter „Nur dieser Monat" und „Vergangene anzeigen" (der angezeigte Monat ist immer zu sehen). Hinzufügen, Bearbeiten (auch Doppelklick) und Entfernen über Dialoge mit Datumsfeldern. Ein Klick auf einen Eintrag in einem anderen Monat wechselt alle Tabs dorthin.</li>
+</ul>
+<figure class="small"><img src="bilder/notizen.png" alt="Notizen-Reiter"><figcaption>Reiter „Notizen": alle Tage des Monats, Klick in die Notiz-Spalte bearbeitet direkt.</figcaption></figure>
+<p><b>Notizen</b> sind Freitext je Tag („Dienst startet um 14:00 Uhr"). Ein Klick in die Notiz-Spalte bearbeitet sie in der Tabelle (Enter übernimmt), mehrzeilig bequemer im Editor darunter; leer = gelöscht. „Nur Tage mit Notiz" blendet den Rest aus. „Alle kopieren" legt alle Notizen des Monats samt Eingeteilten in die Zwischenablage, „Exportieren…" speichert sie als Textdatei. Ein Klick im Kalender wählt den Tag in der Liste, Doppelklick springt in den Editor.</p>
+
+<h2 id="team">6. Tab „Team"</h2>
+<figure><img src="bilder/team_tab.png" alt="Team-Tab"><figcaption>Helferliste mit zwei Einstellungs-Vorlagen.</figcaption></figure>
+<ul>
+  <li><b>+ Helfer hinzufügen</b> legt „Neuer Helfer" an – Name durch Doppelklick in die Namensspalte ändern (gilt sofort, in beiden Vorlagen). <b>– Entfernen</b> fragt nach und löscht auch die Einträge der Person im geöffneten Monat; ihre Abwesenheiten gehen verloren. <b>▲ Hoch / ▼ Runter</b> ändern die Reihenfolge (= Zeilen im Dienstplan und in den Exporten).</li>
+  <li><b>Vorlage 1 / Vorlage 2</b>: je ein kompletter Satz Einstellungen pro Helfer, den man getrennt vorbereiten kann. Änderungen wirken <b>nicht sofort</b> auf den Plan – erst der blaue Button <b>„Vorlage … in Dienstplan <i>Monat</i> übernehmen"</b> kopiert die gezeigte Vorlage in den geöffneten Monat. Jeder Monat merkt sich seine übernommenen Einstellungen.</li>
+</ul>
+<table>
+  <tr><th>Spalte</th><th>Bedeutung</th></tr>
+  <tr><td>Max. Dienste / Min. Dienste</td><td>Soll-Spanne im Monat. „Auto" = kein fester Wert (gleichmäßig verteilen). Max ist eine harte Grenze, Min ein Verteilungsziel. Max steht links, weil es Min begrenzt.</td></tr>
+  <tr><td>Max. Folge</td><td>Höchstens so viele Tage am Stück (Dienst und RB je getrennt gezählt).</td></tr>
+  <tr><td>Min. Block</td><td>Mindestens so viele Tage am Stück – für Helfer mit weiter Anreise; der Würfel plant sie nur in Blöcken dieser Länge.</td></tr>
+  <tr><td>Abstand</td><td>Mindestens so viele freie Tage zwischen zwei Einsätzen derselben Person (Dienst und RB zusammen). Harte Regel. „Aus" = 0.</td></tr>
+  <tr><td>Freiwünsche</td><td>Kontingent der Wunsch-Tage (frei): so viele je Monat haben Vorrang, weitere Nachrang. „Alle" = jeder Wunsch zählt wie Vorrang.</td></tr>
+  <tr><td>Dienstwünsche</td><td>Kontingent der Dienstwunsch-Tage: so viele Dienste sollen auf die gewünschten Tage fallen („3 Dienste an 7 Möglichkeiten"). „Alle" = so viele wie möglich.</td></tr>
+  <tr><td>RB anhängen</td><td>Rufbereitschaft als gleich langen Block direkt vor, nach oder auf beide Seiten des Dienstblocks legen (Anwesenheit am Stück).</td></tr>
+</table>
+<p>Die Soll-Spanne lässt sich auch direkt im Dienstplan ändern (Spalten Soll Max / Soll Min) – das gilt nur für diesen Monat.</p>
+
+<h2 id="einstellungen">7. Einstellungen</h2>
+<figure class="small"><img src="bilder/farben_dialog.png" alt="Farben-Dialog"><figcaption>Einstellungen → Farben: eine Farbe je Eintragsart.</figcaption></figure>
+<ul>
+  <li><b>Farben…</b>: nicht die Helfer, sondern die Eintragsarten tragen die Farbe (VOLL, Tag, Nacht, RB, Urlaub, Wunsch, Dienstwunsch). Vorschau links fest, rechts in Planung. „Standardfarben" setzt zurück. Die Farben gelten im Raster, im Urlaubs-Kalender und im PDF.</li>
+  <li><b>Farbschema</b>: vier Paletten, je hell und dunkel, für die ganze Oberfläche.</li>
+  <li><b>Nach Updates suchen…</b>: siehe <a href="#updates">Updates</a>.</li>
+</ul>
+
+<h2 id="datei">8. Menü „Datei"</h2>
+<table>
+  <tr><th>Eintrag</th><th>Wirkung</th></tr>
+  <tr><td>Monat leeren</td><td>Löscht alle Einträge des Monats (Notizen und Abwesenheiten bleiben).</td></tr>
+  <tr><td>Plan-Datei öffnen…</td><td>Lädt eine mit „Speichern unter…" erzeugte Datei – samt dem darin gespeicherten Team. Achtung: beim nächsten Speichern ersetzt das Team der Datei das aktuelle; das Programm fragt vorher.</td></tr>
+  <tr><td>Speichern (<kbd>Strg</kbd>+<kbd>S</kbd>)</td><td>Schreibt sofort (sonst macht es der Autosave).</td></tr>
+  <tr><td>Speichern unter… (<kbd>Strg</kbd>+<kbd>Umschalt</kbd>+<kbd>S</kbd>)</td><td>Zusätzliche Kopie des Plans samt Team an beliebiger Stelle, z. B. als Variante.</td></tr>
+  <tr><td>Datensicherung erstellen…</td><td>Speichert und packt den ganzen Datenordner als ZIP an einen gewählten Ort.</td></tr>
+  <tr><td>Rückmeldungen importieren… (<kbd>Strg</kbd>+<kbd>I</kbd>)</td><td>Siehe <a href="#rueckmeldung">Rückmeldungen</a>.</td></tr>
+  <tr><td>Ablageordner aktualisieren</td><td>Liest neue Antworten aus dem Ordner „Formularantworten" ein und legt fehlende Monatsordner an.</td></tr>
+  <tr><td>Exportieren → CSV</td><td>Zwei Tabellen (Plan, Zusammenfassung) als Textdateien.</td></tr>
+  <tr><td>Exportieren → Excel</td><td>Plan und Zusammenfassung als .xlsx.</td></tr>
+  <tr><td>Exportieren → PDF</td><td>Aushang für das Team, A4 Hochformat: Seite 1 der ganze Monat (beide Hälften untereinander), Seite 2 Notizen, Zusammenfassung, Legende, Feiertage. Zeigt <b>nur Dienste und Rufbereitschaften</b> – keine Urlaube, keine Wünsche.</td></tr>
+  <tr><td>Exportieren → Notizen (Text)</td><td>Alle Notizen des Monats als Textdatei.</td></tr>
+  <tr><td>Exportieren → Rückmeldeformular (HTML)…</td><td>Erzeugt das Formular für die Helfer, siehe unten.</td></tr>
+</table>
+
+<h2 id="rueckmeldung">9. Rückmeldungen der Helfer</h2>
+<p>Die Helfer melden ihre Monatsdaten (Urlaub, Wunsch frei, Dienstwunsch) per E-Mail. Damit niemand abtippen muss, gibt es ein Formular, das jeder bedienen kann, und einen Import, der die Antworten eindeutig einliest – ohne Raten.</p>
+
+<h3>Formular erzeugen und verschicken</h3>
+<ol class="steps">
+  <li>Den Monat öffnen, für den die Rückmeldungen gebraucht werden.</li>
+  <li><b>Datei → Exportieren → Rückmeldeformular (HTML)…</b>: E-Mail-Adresse eintragen, an die die Helfer antworten sollen (wird gemerkt), Zielordner bestätigen (vorgeschlagen wird der Monatsordner unter „Formularantworten").</li>
+  <li>Die Datei <code>rueckmeldung_JJJJ_MM.html</code> als Anhang an alle Helfer schicken, z. B. im Webmailer. Sie enthält die Helfer des Monats, den Monat und die Adresse.</li>
+</ol>
+<figure class="small"><img src="bilder/formular.png" alt="Rückmeldeformular am Handy"><figcaption>So sieht das Formular beim Helfer aus (Handy-Breite).</figcaption></figure>
+<p><b>Beim Helfer</b>: die Datei im Browser öffnen (PC oder Handy, ohne Internet), Namen wählen, eine Art antippen (Urlaub, Wunsch frei, Dienstwunsch, Löschen), dann die Tage im Kalender. Unten stehen Zusammenfassung, ein Bemerkungsfeld und der fertige Mailtext. „Per E-Mail senden" öffnet das Mailprogramm mit Betreff und Text, „Text kopieren" legt ihn in die Zwischenablage, „Als Datei speichern" lädt ihn als Textdatei. Die Eingaben bleiben im Browser des Geräts gespeichert. Der Mailtext endet mit einer Zeile wie</p>
+<pre>JA1;2026-11;8cdf0de4;T:2026-10-20T14:03:05;U:3,10-14;W:5,6;D:7-9;N:Am%2012.;END</pre>
+<p>Das ist die Maschinenzeile: Monat, Helfer, Zeitstempel („Stand"), Urlaub (U), Wunsch frei (W), Dienstwunsch (D) als Tageslisten, Bemerkung (N). Sie muss unverändert mitgeschickt werden; Umbrüche durch das Mailprogramm stören nicht.</p>
+
+<h3>Antworten einlesen</h3>
+<figure><img src="bilder/import_dialog.png" alt="Import-Dialog"><figcaption>Der Import-Dialog zeigt jede gefundene Rückmeldung mit Stand, Zahlen, Bemerkung, was ersetzt würde, dem letzten Import und dem Status.</figcaption></figure>
+<p>Drei Wege, alle lesen dieselbe Zeile:</p>
+<ol class="steps">
+  <li><b>Import-Button</b> rechts neben den Stempeln <img src="bilder/import_button.png" alt="Import-Button" style="height:1.6em;vertical-align:middle"> oder <b>Datei → Rückmeldungen importieren…</b> (<kbd>Strg</kbd>+<kbd>I</kbd>): Mailtext aus dem Webmailer kopieren und oben einfügen (mehrere Mails hintereinander sind in Ordnung; liegt schon eine Rückmeldung in der Zwischenablage, steht sie beim Öffnen drin). Oder „Dateien wählen…" (.txt, .eml, .html) oder „Ablageordner durchsuchen". Die Tabelle prüfen, dann <b>Übernehmen</b>.</li>
+  <li><b>Ablageordner „Formularantworten"</b> neben dem Programmordner, je Monat ein Unterordner (z. B. <code>2026-11_November</code>; eine LIESMICH.txt liegt dabei). Antworten dort ablegen: den Mailtext als .txt speichern, die Mail als .eml, oder die Textdatei aus dem Anhang. <b>Beim Programmstart</b> und über <b>Datei → Ablageordner aktualisieren</b> werden alle neuen oder geänderten Dateien ab dem heutigen Monat eingelesen; das Ergebnis wird gemeldet. Die Monatsordner für die nächsten sechs Monate legt das Programm selbst an.</li>
+</ol>
+<div class="hint"><b>Was beim Einlesen passiert</b>: Eine Rückmeldung <b>ersetzt</b> Urlaub, Wunsch und Dienstwunsch des Helfers für den gemeldeten Monat – eine korrigierte Rückmeldung gilt also komplett. Andere Monate und andere Helfer bleiben unberührt. Das Programm merkt sich je Helfer und Monat den <b>Stand</b> (Zeitstempel aus dem Formular) und den Importzeitpunkt; kommt eine Rückmeldung mit <b>älterem</b> Stand als die zuletzt eingelesene, fragt es nach, bevor sie den neueren ersetzt. Im Ablageordner wird jede Datei nur einmal eingelesen (Merker <code>eingelesen.json</code>); <code>protokoll.txt</code> hält fest, was wann übernommen wurde, samt Bemerkung. Fehlerhafte Zeilen (unbekannter Helfer, Tag nicht im Monat …) werden gezeigt und nicht übernommen.</div>
+
+<h2 id="speichern">10. Speichern und Datensicherheit</h2>
+<ul>
+  <li><b>Autosave</b>: sobald es Änderungen gibt, schreibt das Programm sie spätestens nach 15 Sekunden; außerdem bei Monatswechsel, beim Beenden und mit <kbd>Strg</kbd>+<kbd>S</kbd>.</li>
+  <li><b>Beenden</b> mit offenen Änderungen fragt: Speichern und beenden / Ohne Speichern beenden / Abbrechen.</li>
+  <li>Alle Daten liegen als JSON im Ordner <code>data</code> neben dem Programm: <code>team.json</code> (Team, Abwesenheiten, Wünsche, Vorlagen), <code>plans/plan_JJJJ_MM.json</code> (ein Plan je Monat mit Notizen und Einstellungen), <code>settings.json</code>. Jede Datei wird erst komplett neu geschrieben und dann an ihren Platz verschoben; die vorige Fassung bleibt als <code>.bak</code>. Ist eine Datei beschädigt, greift das Programm auf die Sicherungskopie zurück und sagt Bescheid.</li>
+  <li><b>Datensicherung</b>: bei jeder neuen Programmversion wird <code>data</code> automatisch nach <code>data/sicherungen</code> kopiert (die letzten zehn bleiben); von Hand jederzeit über Datei → Datensicherung erstellen… (ZIP). Zurückholen: Programm schließen, Ordner <code>data</code> aus der Sicherung in den Programmordner kopieren.</li>
+</ul>
+
+<h2 id="updates">11. Updates</h2>
+<p>Die installierte Windows-Version prüft beim Start, ob es auf GitHub eine neue Version gibt, und bietet sie an (Jetzt installieren / Später / Diese Version überspringen). Vor dem Update wird gespeichert; das Programm beendet sich, tauscht den Programmordner aus und startet neu. Der Datenordner, die Vorlagen-Anpassungen neben dem Programm und der Ablageordner bleiben unangetastet. Jederzeit von Hand: Einstellungen → Nach Updates suchen…</p>
+
+<h2 id="tasten">12. Tastenkürzel</h2>
+<table>
+  <tr><th>Taste</th><th>Wirkung</th></tr>
+  <tr><td><kbd>Strg</kbd>+<kbd>S</kbd></td><td>Speichern</td></tr>
+  <tr><td><kbd>Strg</kbd>+<kbd>Umschalt</kbd>+<kbd>S</kbd></td><td>Speichern unter…</td></tr>
+  <tr><td><kbd>Strg</kbd>+<kbd>I</kbd></td><td>Rückmeldungen importieren…</td></tr>
+  <tr><td><kbd>F1</kbd></td><td>Diese Hilfe</td></tr>
+  <tr><td><kbd>Strg</kbd>/<kbd>Umschalt</kbd> + Klick</td><td>Mehrere Zellen oder Tage markieren (dann Rechtsklick)</td></tr>
+</table>
+
+<p style="margin-top:40px;color:var(--muted);font-size:.9rem">Weiter: <a href="planungslogik.html">Planungslogik – wie der Würfel vergibt und woran man Fairness erkennt</a></p>
+</main>
+</body>
+</html>

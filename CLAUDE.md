@@ -30,9 +30,10 @@ scheduling/      # Random generator engine + validator
 ui/              # PySide6/Qt UI components and dialogs
 persistence/     # JSON save/load, app settings, format migrations
 export/          # CSV, Excel, PDF exporters + form_exporter (HTML feedback form from vorlagen/)
+hilfe/           # User help as HTML (bedienung.html, planungslogik.html, stil.css, bilder/*.png); opened in the browser via menu Hilfe (ui/help.py); screenshots regenerated with tools/make_screenshots.py (offscreen, example data); bundled via --add-data
 vorlagen/        # rueckmeldung.html: standalone HTML form the helpers fill in (template with /*CONFIG*/ markers; bundled via PyInstaller --add-data)
 feedback/        # Helpers' replies: parser.py (machine line JA1;…;END), inbox.py (drop folder "Formularantworten" next to the program dir, month subfolders, processed-file record), apply.py (replace a helper's U/W/D days of that month)
-main.py          # Entry point: JohannaApp wires everything, owns save/load flow + update dialogs
+main.py          # Entry point: JohannaApp wires everything, owns save/load flow + update dialogs + Hilfe menu (ui/help.py: open_help/show_about; lookup hilfe/ next to exe → _MEIPASS → project)
 version.py       # __version__ + GITHUB_REPO - single source of truth (window title, updater; keep pyproject.toml in sync, workflow enforces it on v* tags)
 updater.py       # Auto-update via GitHub releases: check/download threads, robocopy swap script (spares data\); asset name JohannaAssistenten-windows.zip is part of the contract
 BESCHREIBUNG.md  # Authoritative German description of purpose & behavior

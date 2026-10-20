@@ -33,7 +33,7 @@ jobs:
           }
 
       - name: Build mit PyInstaller
-        run: uv run pyinstaller --noconsole --onedir --name JohannaAssistenten --add-data "vorlagen;vorlagen" main.py
+        run: uv run pyinstaller --noconsole --onedir --name JohannaAssistenten --add-data "vorlagen;vorlagen" --add-data "hilfe;hilfe" main.py
 
       # Achtung: Ordner- und ZIP-Name sind Teil des Update-Vertrags -
       # updater.py sucht im Release genau das Asset
